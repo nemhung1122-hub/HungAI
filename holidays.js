@@ -3,14 +3,20 @@
  * HUNGAI - HOLIDAYS & SPECIAL DAYS
  * ==========================================
  *
- * type:
- * official = ngày lễ / ngày nghỉ chính thức
- * special  = ngày kỷ niệm
- * youth    = ngày phổ biến / văn hóa / giới trẻ
+ * official      = ngày lễ chính thức
+ * special       = ngày kỷ niệm
+ * international = ngày quốc tế
+ * youth         = ngày phổ biến / văn hóa / giới trẻ
  *
- * Lưu ý:
- * Đây là dữ liệu ngày cố định theo ngày/tháng.
- * Không để AI tự đoán ngày.
+ * Dữ liệu được xử lý cố định theo ngày/tháng.
+ * Không để AI tự đoán các ngày này.
+ */
+
+
+/*
+ * ==========================================
+ * NGÀY LỄ CHÍNH THỨC Ở VIỆT NAM
+ * ==========================================
  */
 
 const OFFICIAL_HOLIDAYS = {
@@ -19,6 +25,13 @@ const OFFICIAL_HOLIDAYS = {
   "1/5": "Ngày Quốc tế Lao động",
   "2/9": "Quốc khánh Việt Nam"
 };
+
+
+/*
+ * ==========================================
+ * NGÀY KỶ NIỆM Ở VIỆT NAM
+ * ==========================================
+ */
 
 const SPECIAL_DAYS = {
   "3/2": "Ngày thành lập Đảng Cộng sản Việt Nam",
@@ -47,17 +60,38 @@ const SPECIAL_DAYS = {
   "22/12": "Ngày thành lập Quân đội Nhân dân Việt Nam"
 };
 
+
+/*
+ * ==========================================
+ * NGÀY QUỐC TẾ
+ * ==========================================
+ */
+
+const INTERNATIONAL_DAYS = {
+  "4/2": "Ngày Thế giới Phòng chống Ung thư",
+  "20/3": "Ngày Quốc tế Hạnh phúc",
+  "22/3": "Ngày Nước Thế giới",
+  "22/4": "Ngày Trái Đất",
+  "1/6": "Ngày Quốc tế Thiếu nhi",
+  "5/6": "Ngày Môi trường Thế giới",
+  "8/6": "Ngày Đại dương Thế giới",
+  "12/8": "Ngày Quốc tế Thanh niên",
+  "10/12": "Ngày Nhân quyền Thế giới"
+};
+
+
+/*
+ * ==========================================
+ * NGÀY PHỔ BIẾN / VĂN HÓA / GIỚI TRẺ
+ * ==========================================
+ */
+
 const YOUTH_DAYS = {
   "14/2": "Valentine - Ngày lễ tình nhân",
-
   "1/4": "Cá tháng Tư",
-
   "1/6": "Ngày Quốc tế Thiếu nhi",
-
   "31/10": "Halloween",
-
   "24/12": "Đêm Giáng sinh",
-
   "25/12": "Giáng sinh"
 };
 
@@ -69,100 +103,7 @@ const YOUTH_DAYS = {
  */
 
 export function getDayEvents(day, month, year) {
-  const key =
-    `${Number(day)}/${Number(month)}`;
 
-  const events = [];
-
-  if (OFFICIAL_HOLIDAYS[key]) {
-    events.push({
-      name: OFFICIAL_HOLIDAYS[key],
-      type: "official"
-    });
-  }
-
-  if (SPECIAL_DAYS[key]) {
-    events.push({
-      name: SPECIAL_DAYS[key],
-      type: "special"
-    });
-  }
-
-  if (YOUTH_DAYS[key]) {
-    events.push({
-      name: YOUTH_DAYS[key],
-      type: "youth"
-    });
-  }
-
-  return events;
-}
-
-
-/*
- * ==========================================
- * CHỈ LẤY NGÀY LỄ CHÍNH THỨC
- * ==========================================
- */
-
-export function getOfficialHolidays(day, month, year) {
-  const key =
-    `${Number(day)}/${Number(month)}`;
-
-  if (!OFFICIAL_HOLIDAYS[key]) {
-    return [];
-  }
-
-  return [
-    {
-      name: OFFICIAL_HOLIDAYS[key],
-      type: "official"
-    }
-  ];
-}
-
-
-/*
- * ==========================================
- * FORMAT HIỂN THỊ
- * ==========================================
- */
-
-export function formatDayEvents(events) {
-
-  if (!events || events.length === 0) {
-    return "Không có ngày đặc biệt trong dữ liệu.";
-  }
-
-  return events
-    .map((event) => {
-
-      if (event.type === "official") {
-        return `🇻🇳 Ngày lễ chính thức: ${event.name}`;
-      }
-
-      if (event.type === "special") {
-        return `📌 Ngày kỷ niệm: ${event.name}`;
-      }
-
-      if (event.type === "youth") {
-        return `📱 Ngày phổ biến: ${event.name}`;
-      }
-
-      return `🌎 ${event.name}`;
-    })
-    .join("\n");
-}
-const YOUTH_DAYS = {
-  "14/2": "Valentine",
-  "1/4": "Cá tháng Tư",
-  "1/6": "Ngày Quốc tế Thiếu nhi",
-  "31/10": "Halloween",
-  "24/12": "Đêm Giáng sinh",
-  "25/12": "Giáng sinh"
-};
-
-export function getDayEvents(day, month, year) {
   const key =
     `${Number(day)}/${Number(month)}`;
 
@@ -195,11 +136,19 @@ export function getDayEvents(day, month, year) {
   return events;
 }
 
+
+/*
+ * ==========================================
+ * CHỈ LẤY NGÀY LỄ CHÍNH THỨC
+ * ==========================================
+ */
+
 export function getOfficialHolidays(
   day,
   month,
   year
 ) {
+
   const key =
     `${Number(day)}/${Number(month)}`;
 
@@ -207,13 +156,23 @@ export function getOfficialHolidays(
     return [];
   }
 
-  return [{
-    name: OFFICIAL_HOLIDAYS[key],
-    type: "official"
-  }];
+  return [
+    {
+      name: OFFICIAL_HOLIDAYS[key],
+      type: "official"
+    }
+  ];
 }
 
+
+/*
+ * ==========================================
+ * FORMAT SỰ KIỆN
+ * ==========================================
+ */
+
 export function formatDayEvents(events) {
+
   if (
     !events ||
     events.length === 0
@@ -222,7 +181,7 @@ export function formatDayEvents(events) {
   }
 
   return events
-    .map(event => {
+    .map((event) => {
 
       if (event.type === "official") {
         return `🇻🇳 Ngày lễ chính thức: ${event.name}`;
@@ -245,11 +204,19 @@ export function formatDayEvents(events) {
     .join("\n");
 }
 
+
+/*
+ * ==========================================
+ * THÊM SỰ KIỆN
+ * ==========================================
+ */
+
 function addEvent(
   events,
   name,
   type
 ) {
+
   if (!name) {
     return;
   }
