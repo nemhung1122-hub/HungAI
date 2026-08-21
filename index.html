@@ -11,28 +11,22 @@
     * {
       box-sizing: border-box;
     }
-    html,
     body {
       margin: 0;
-      width: 100%;
-      height: 100%;
-    }
-    body {
+      height: 100vh;
       background: #0b0f14;
-      color: #ffffff;
+      color: white;
       font-family: Arial, sans-serif;
       display: flex;
       flex-direction: column;
     }
     header {
       height: 60px;
-      flex-shrink: 0;
       display: flex;
       align-items: center;
       padding: 0 18px;
       background: #111720;
-      border-bottom:
-        1px solid #252d38;
+      border-bottom: 1px solid #252d38;
       font-size: 20px;
       font-weight: bold;
     }
@@ -75,26 +69,20 @@
       gap: 10px;
       padding: 12px;
       background: #111720;
-      border-top:
-        1px solid #252d38;
+      border-top: 1px solid #252d38;
     }
     textarea {
       flex: 1;
-      min-width: 0;
       min-height: 48px;
       max-height: 150px;
       resize: none;
-      border:
-        1px solid #303b48;
+      border: 1px solid #303b48;
       border-radius: 14px;
       background: #0b0f14;
-      color: #ffffff;
+      color: white;
       padding: 13px;
       font-size: 15px;
       outline: none;
-    }
-    textarea:focus {
-      border-color: #2563eb;
     }
     button {
       width: 80px;
@@ -106,6 +94,12 @@
     }
     button:disabled {
       opacity: 0.5;
+    }
+    .clear {
+      width: auto;
+      padding: 0 12px;
+      background: #252d38;
+      font-size: 12px;
     }
   </style>
 </head>
@@ -123,21 +117,81 @@
     placeholder="Nhập tin nhắn..."
   ></textarea>
   <button
-    id="send"
-    type="button"
+    id="clear"
+    class="clear"
   >
+    Xóa
+  </button>
+  <button id="send">
     Gửi
   </button>
 </div>
 <script>
 const API_URL =
   "https://hungai-api.nemhung1122.workers.dev/";
+const STORAGE_KEY =
+  "hungai_history";
 const chat =
   document.getElementById("chat");
 const input =
   document.getElementById("input");
 const send =
   document.getElementById("send");
+const clear =
+  document.getElementById("clear");
+/*
+ * ========================================
+ * HISTORY
+ * ========================================
+ */
+let history = loadHistory();
+function loadHistory() {
+  try {
+    const raw =
+      localStorage.getItem(
+        STORAGE_KEY
+      );
+    if (!raw) {
+      return [];
+    }
+    const data =
+      JSON.parse(raw);
+    if (!Array.isArray(data)) {
+      return [];
+    }
+    return data
+      .filter(item =>
+        item &&
+        (
+          item.role === "user" ||
+          item.role === "assistant"
+        ) &&
+        typeof item.content === "string" &&
+        item.content.trim()
+      )
+      .slice(-40);
+  } catch {
+    return [];
+  }
+}
+function saveHistory() {
+  try {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(history)
+    );
+  } catch (error) {
+    console.error(
+      "HungAI history error:",
+      error
+    );
+  }
+}
+/*
+ * ========================================
+ * MESSAGE UI
+ * ========================================
+ */
 function addMessage(
   text,
   type
@@ -147,34 +201,51 @@ function addMessage(
   div.className =
     "message " + type;
   div.textContent =
-    String(text);
+    String(text ?? "");
   chat.appendChild(div);
   chat.scrollTop =
     chat.scrollHeight;
   return div;
 }
-async function sendMessage() {
-  const message =
-    input.value.trim();
+/*
+ * ========================================
+ * LOAD CHAT
+ * ========================================
+ */
+function loadChat() {
+  chat.innerHTML = "";
   if (
-    !message ||
-    send.disabled
+    history.length === 0
   ) {
-    return;
-  }
-  addMessage(
-    message,
-    "user"
-  );
-  input.value = "";
-  send.disabled = true;
-  const thinking =
     addMessage(
-      "HungAI đang suy nghĩ...",
+      "Xin chào! Mình là HungAI. 👋",
       "ai"
     );
+    return;
+  }
+  for (
+    const item of history
+  ) {
+    addMessage(
+      item.content,
+      item.role === "user"
+        ? "user"
+        : "ai"
+    );
+  }
+}
+/*
+ * ========================================
+ * CALL WORKER
+ * ========================================
+ */
+async function callHungAI(
+  message,
+  previousHistory
+) {
+  let response;
   try {
-    const response =
+    response =
       await fetch(
         API_URL,
         {
@@ -186,45 +257,131 @@ async function sendMessage() {
           body:
             JSON.stringify({
               message,
-              history: []
+              history:
+                previousHistory
+                  .slice(-12)
             })
         }
       );
-    const raw =
-      await response.text();
-    let data;
-    try {
-      data =
-        JSON.parse(raw);
-    } catch {
-      throw new Error(
-        `Worker trả dữ liệu không hợp lệ. HTTP ${response.status}`
-      );
-    }
-    if (!response.ok) {
-      throw new Error(
-        data?.error ||
-        `Worker lỗi HTTP ${response.status}`
-      );
-    }
-    if (
-      typeof data?.reply !== "string" ||
-      !data.reply.trim()
-    ) {
-      throw new Error(
-        data?.error ||
-        "Worker không trả về câu trả lời."
-      );
-    }
-    thinking.remove();
+  } catch (error) {
+    console.error(
+      "FETCH ERROR:",
+      error
+    );
+    throw new Error(
+      "Không kết nối được tới Worker. Hãy kiểm tra mạng hoặc URL Worker."
+    );
+  }
+  const text =
+    await response.text();
+  let data;
+  try {
+    data =
+      JSON.parse(text);
+  } catch {
+    console.error(
+      "INVALID JSON:",
+      text
+    );
+    throw new Error(
+      `Worker trả dữ liệu không hợp lệ. HTTP ${response.status}`
+    );
+  }
+  if (!response.ok) {
+    throw new Error(
+      data?.error ||
+      `Worker lỗi HTTP ${response.status}`
+    );
+  }
+  if (
+    typeof data?.reply !== "string" ||
+    !data.reply.trim()
+  ) {
+    console.error(
+      "BAD RESPONSE:",
+      data
+    );
+    throw new Error(
+      data?.error ||
+      "Worker không trả về câu trả lời."
+    );
+  }
+  return data.reply;
+}
+/*
+ * ========================================
+ * SEND
+ * ========================================
+ */
+async function sendMessage() {
+  const message =
+    input.value.trim();
+  if (
+    !message ||
+    send.disabled
+  ) {
+    return;
+  }
+  /*
+   * Hiển thị user.
+   */
+  addMessage(
+    message,
+    "user"
+  );
+  input.value = "";
+  send.disabled = true;
+  const thinking =
     addMessage(
-      data.reply,
+      "HungAI đang suy nghĩ...",
       "ai"
     );
+  /*
+   * Quan trọng:
+   *
+   * Gửi history CŨ.
+   *
+   * Sau khi AI trả lời thành công
+   * mới thêm message mới vào history.
+   */
+  const historyForRequest =
+    history.slice(-12);
+  try {
+    const reply =
+      await callHungAI(
+        message,
+        historyForRequest
+      );
+    thinking.remove();
+    addMessage(
+      reply,
+      "ai"
+    );
+    /*
+     * Lưu cả câu hỏi và câu trả lời.
+     */
+    history.push({
+      role: "user",
+      content: message
+    });
+    history.push({
+      role: "assistant",
+      content: reply
+    });
+    /*
+     * Tối đa 40 message.
+     */
+    if (
+      history.length > 40
+    ) {
+      history =
+        history.slice(-40);
+    }
+    saveHistory();
   } catch (error) {
     thinking.remove();
     console.error(
-      "HungAI:",
+      "HungAI ERROR:",
       error
     );
     addMessage(
@@ -240,10 +397,38 @@ async function sendMessage() {
     input.focus();
   }
 }
+/*
+ * ========================================
+ * CLEAR
+ * ========================================
+ */
+clear.addEventListener(
+  "click",
+  () => {
+    history = [];
+    try {
+      localStorage.removeItem(
+        STORAGE_KEY
+      );
+    } catch {}
+    loadChat();
+    input.focus();
+  }
+);
+/*
+ * ========================================
+ * BUTTON
+ * ========================================
+ */
 send.addEventListener(
   "click",
   sendMessage
 );
+/*
+ * ========================================
+ * ENTER
+ * ========================================
+ */
 input.addEventListener(
   "keydown",
   event => {
@@ -256,10 +441,12 @@ input.addEventListener(
     }
   }
 );
-addMessage(
-  "Xin chào! Mình là HungAI. 👋",
-  "ai"
-);
+/*
+ * ========================================
+ * START
+ * ========================================
+ */
+loadChat();
 input.focus();
 </script>
 </body>
