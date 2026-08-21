@@ -8,10 +8,11 @@ const WEEKDAYS = [
   "Thứ Bảy"
 ];
 
+const TIME_ZONE = "Asia/Ho_Chi_Minh";
+
 export function getVietnamDate(date = new Date()) {
-  const parts = new Intl.DateTimeFormat("vi-VN", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    weekday: "long",
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TIME_ZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -21,46 +22,59 @@ export function getVietnamDate(date = new Date()) {
     hour12: false
   }).formatToParts(date);
 
-  const get = (type) =>
-    parts.find((p) => p.type === type)?.value;
+  const get = (type) => {
+    const part = parts.find(
+      (item) => item.type === type
+    );
+
+    return part ? part.value : "";
+  };
 
   const year = Number(get("year"));
   const month = Number(get("month"));
   const day = Number(get("day"));
+  const hour = Number(get("hour"));
+  const minute = Number(get("minute"));
+  const second = Number(get("second"));
 
-  /*
-   * Tính thứ bằng UTC.
-   * Không để AI tự đoán.
-   */
-  const weekdayIndex = new Date(
-    Date.UTC(year, month - 1, day)
-  ).getUTCDay();
+  const weekdayIndex =
+    new Date(
+      Date.UTC(
+        year,
+        month - 1,
+        day
+      )
+    ).getUTCDay();
 
   return {
     day,
     month,
     year,
     weekday: WEEKDAYS[weekdayIndex],
-    hour: Number(get("hour")),
-    minute: Number(get("minute")),
-    second: Number(get("second")),
-    timezone: "Asia/Ho_Chi_Minh"
+    hour,
+    minute,
+    second,
+    timezone: TIME_ZONE
   };
 }
 
 export function formatVietnamDate(info) {
   return (
     `${info.weekday}, ` +
-    `ngày ${String(info.day).padStart(2, "0")}/` +
-    `${String(info.month).padStart(2, "0")}/` +
+    `ngày ${pad(info.day)}/` +
+    `${pad(info.month)}/` +
     `${info.year}`
   );
 }
 
 export function formatVietnamTime(info) {
   return (
-    `${String(info.hour).padStart(2, "0")}:` +
-    `${String(info.minute).padStart(2, "0")}:` +
-    `${String(info.second).padStart(2, "0")}`
+    `${pad(info.hour)}:` +
+    `${pad(info.minute)}:` +
+    `${pad(info.second)}`
   );
+}
+
+function pad(number) {
+  return String(number).padStart(2, "0");
 }
