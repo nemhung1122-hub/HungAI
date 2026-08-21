@@ -14,10 +14,19 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Deploy to Cloudflare
+      - name: Deploy HungAI
+        id: deploy
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           command: deploy
+
+      - name: Show Wrangler error
+        if: failure()
+        run: |
+          echo "===== WRANGLER STDERR ====="
+          echo '${{ steps.deploy.outputs.command-stderr }}'
+          echo "===== WRANGLER OUTPUT ====="
+          echo '${{ steps.deploy.outputs.command-output }}'
