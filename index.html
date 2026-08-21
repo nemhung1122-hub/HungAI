@@ -8,17 +8,23 @@
     * {
       box-sizing: border-box;
     }
+    html,
     body {
       margin: 0;
-      height: 100vh;
+      width: 100%;
+      height: 100%;
+    }
+    body {
       background: #0b0f14;
-      color: #fff;
+      color: #ffffff;
       font-family: Arial, sans-serif;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
     header {
       height: 60px;
+      min-height: 60px;
       display: flex;
       align-items: center;
       padding: 0 18px;
@@ -40,6 +46,7 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
+      -webkit-overflow-scrolling: touch;
     }
     .message {
       max-width: 88%;
@@ -70,30 +77,38 @@
     }
     textarea {
       flex: 1;
+      min-width: 0;
       min-height: 48px;
       max-height: 150px;
       resize: none;
       border: 1px solid #303b48;
       border-radius: 14px;
       background: #0b0f14;
-      color: white;
+      color: #ffffff;
       padding: 13px;
       font-size: 15px;
       outline: none;
     }
+    textarea:focus {
+      border-color: #2563eb;
+    }
     button {
       width: 80px;
+      min-width: 80px;
       border: none;
       border-radius: 14px;
       background: #2563eb;
-      color: white;
+      color: #ffffff;
       font-weight: bold;
+      cursor: pointer;
     }
     button:disabled {
       opacity: 0.5;
+      cursor: default;
     }
     .clear {
       width: auto;
+      min-width: 55px;
       padding: 0 12px;
       background: #252d38;
       font-size: 12px;
@@ -110,19 +125,41 @@
   <textarea
     id="input"
     placeholder="Nhập tin nhắn..."
+    autocomplete="off"
   ></textarea>
-  <button id="clear" class="clear">
+  <button
+    id="clear"
+    class="clear"
+    type="button"
+  >
     Xóa
   </button>
-  <button id="send">
+  <button
+    id="send"
+    type="button"
+  >
     Gửi
   </button>
 </div>
 <script>
+/*
+ * ==========================================
+ * CẤU HÌNH
+ * ==========================================
+ */
 const API_URL =
   "https://hungai-api.nemhung1122.workers.dev/";
 const STORAGE_KEY =
   "hungai_history";
+const MAX_HISTORY =
+  40;
+const MAX_HISTORY_TO_SEND =
+  12;
+/*
+ * ==========================================
+ * DOM
+ * ==========================================
+ */
 const chat =
   document.getElementById("chat");
 const input =
@@ -132,15 +169,18 @@ const send =
 const clear =
   document.getElementById("clear");
 /*
- * ================================
- * HISTORY
- * ================================
+ * ==========================================
+ * LỊCH SỬ
+ * ==========================================
  */
-let history = loadHistoryStorage();
-function loadHistoryStorage() {
+let history =
+  loadHistory();
+function loadHistory() {
   try {
     const raw =
-      localStorage.getItem(STORAGE_KEY);
+      localStorage.getItem(
+        STORAGE_KEY
+      );
     if (!raw) {
       return [];
     }
@@ -150,18 +190,21 @@ function loadHistoryStorage() {
       return [];
     }
     return parsed
-      .filter(item =>
-        item &&
-        (
-          item.role === "user" ||
-          item.role === "assistant"
-        ) &&
-        typeof item.content === "string"
-      )
-      .slice(-40);
+      .filter(item => {
+        return (
+          item &&
+          (
+            item.role === "user" ||
+            item.role === "assistant"
+          ) &&
+          typeof item.content === "string" &&
+          item.content.trim().length > 0
+        );
+      })
+      .slice(-MAX_HISTORY);
   } catch (error) {
-    console.warn(
-      "Không đọc được lịch sử:",
+    console.error(
+      "HungAI: lỗi đọc lịch sử:",
       error
     );
     return [];
@@ -174,18 +217,21 @@ function saveHistory() {
       JSON.stringify(history)
     );
   } catch (error) {
-    console.warn(
-      "Không lưu được lịch sử:",
+    console.error(
+      "HungAI: lỗi lưu lịch sử:",
       error
     );
   }
 }
 /*
- * ================================
- * MESSAGE
- * ================================
+ * ==========================================
+ * HIỂN THỊ TIN NHẮN
+ * ==========================================
  */
-function addMessage(text, type) {
+function addMessage(
+  text,
+  type
+) {
   const div =
     document.createElement("div");
   div.className =
@@ -198,15 +244,14 @@ function addMessage(text, type) {
   return div;
 }
 /*
- * ================================
+ * ==========================================
  * LOAD CHAT
- * ================================
+ * ==========================================
  */
 function loadChat() {
   chat.innerHTML = "";
   if (
-    !Array.isArray(history) ||
-    history.length === 0
+    !history.length
   ) {
     addMessage(
       "Xin chào! Mình là HungAI. 👋",
@@ -214,7 +259,9 @@ function loadChat() {
     );
     return;
   }
-  for (const item of history) {
+  for (
+    const item of history
+  ) {
     addMessage(
       item.content,
       item.role === "user"
@@ -224,83 +271,91 @@ function loadChat() {
   }
 }
 /*
- * ================================
+ * ==========================================
+ * CHUẨN BỊ HISTORY
+ * ==========================================
+ */
+function prepareHistory() {
+  return history
+    .filter(item => {
+      return (
+        item &&
+        (
+          item.role === "user" ||
+          item.role === "assistant"
+        ) &&
+        typeof item.content === "string"
+      );
+    })
+    .slice(-MAX_HISTORY_TO_SEND);
+}
+/*
+ * ==========================================
  * GỌI WORKER
- * ================================
+ * ==========================================
  */
 async function callHungAI(
-  message,
-  previousHistory
+  message
 ) {
-  let response;
-  try {
-    response =
-      await fetch(
-        API_URL,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json"
-          },
-          body: JSON.stringify({
+  console.log(
+    "HungAI: gửi request..."
+  );
+  console.log(
+    "HungAI URL:",
+    API_URL
+  );
+  const response =
+    await fetch(
+      API_URL,
+      {
+        method: "POST",
+        mode: "cors",
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
+        body: JSON.stringify({
+          message:
             message,
-            history:
-              previousHistory
-                .filter(item =>
-                  item &&
-                  (
-                    item.role === "user" ||
-                    item.role === "assistant"
-                  ) &&
-                  typeof item.content === "string"
-                )
-                .slice(-12)
-          })
-        }
-      );
-  } catch (error) {
-    console.error(
-      "HungAI FETCH ERROR:",
-      error
+          history:
+            prepareHistory()
+        })
+      }
     );
-    throw new Error(
-      "Không thể kết nối tới Worker HungAI."
-    );
-  }
-  /*
-   * Đọc response dưới dạng text
-   * trước, tránh lỗi JSON làm mất
-   * thông tin thật từ Worker.
-   */
-  const text =
+  console.log(
+    "HungAI HTTP status:",
+    response.status
+  );
+  const raw =
     await response.text();
-  let data = null;
+  console.log(
+    "HungAI raw response:",
+    raw
+  );
+  let data;
   try {
     data =
-      text
-        ? JSON.parse(text)
+      raw
+        ? JSON.parse(raw)
         : null;
   } catch (error) {
-    console.error(
-      "HungAI INVALID JSON:",
-      text
-    );
     throw new Error(
-      `Worker trả dữ liệu không hợp lệ (HTTP ${response.status}).`
+      `Worker trả về dữ liệu không hợp lệ. HTTP ${response.status}`
     );
   }
   /*
-   * Worker trả lỗi.
+   * Worker trả lỗi HTTP
    */
-  if (!response.ok) {
+  if (
+    !response.ok
+  ) {
     throw new Error(
       data?.error ||
       `Worker lỗi HTTP ${response.status}.`
     );
   }
   /*
-   * Worker phải trả reply.
+   * Không có reply
    */
   if (
     !data ||
@@ -308,19 +363,20 @@ async function callHungAI(
     !data.reply.trim()
   ) {
     console.error(
-      "HungAI RESPONSE:",
+      "HungAI data:",
       data
     );
     throw new Error(
-      "Worker chạy nhưng không trả về câu trả lời."
+      data?.error ||
+      "Worker chạy thành công nhưng không có câu trả lời."
     );
   }
   return data.reply;
 }
 /*
- * ================================
- * SEND
- * ================================
+ * ==========================================
+ * GỬI TIN NHẮN
+ * ==========================================
  */
 async function sendMessage() {
   const message =
@@ -331,41 +387,44 @@ async function sendMessage() {
   ) {
     return;
   }
+  /*
+   * Hiển thị câu hỏi
+   */
   addMessage(
     message,
     "user"
   );
   input.value = "";
   send.disabled = true;
+  /*
+   * Hiển thị trạng thái
+   */
   const thinking =
     addMessage(
       "HungAI đang suy nghĩ...",
       "ai"
     );
-  /*
-   * QUAN TRỌNG:
-   *
-   * history hiện tại chưa chứa
-   * câu user mới.
-   *
-   * Worker sẽ tự thêm message.
-   */
-  const historyForRequest =
-    history.slice(-12);
   try {
+    /*
+     * Gọi Worker
+     */
     const reply =
       await callHungAI(
-        message,
-        historyForRequest
+        message
       );
+    /*
+     * Xóa trạng thái
+     */
     thinking.remove();
+    /*
+     * Hiển thị câu trả lời
+     */
     addMessage(
       reply,
       "ai"
     );
     /*
-     * Chỉ lưu sau khi AI trả lời
-     * thành công.
+     * Lưu lịch sử
      */
     history.push({
       role: "user",
@@ -375,11 +434,17 @@ async function sendMessage() {
       role: "assistant",
       content: reply
     });
+    /*
+     * Giới hạn lịch sử
+     */
     if (
-      history.length > 40
+      history.length >
+      MAX_HISTORY
     ) {
       history =
-        history.slice(-40);
+        history.slice(
+          -MAX_HISTORY
+        );
     }
     saveHistory();
   } catch (error) {
@@ -388,6 +453,10 @@ async function sendMessage() {
       "HungAI ERROR:",
       error
     );
+    /*
+     * Hiện lỗi thật,
+     * không giấu lỗi fetch nữa.
+     */
     addMessage(
       "Lỗi: " +
       (
@@ -402,9 +471,9 @@ async function sendMessage() {
   }
 }
 /*
- * ================================
- * CLEAR
- * ================================
+ * ==========================================
+ * XÓA LỊCH SỬ
+ * ==========================================
  */
 clear.addEventListener(
   "click",
@@ -414,24 +483,28 @@ clear.addEventListener(
       localStorage.removeItem(
         STORAGE_KEY
       );
-    } catch (_) {}
+    } catch (error) {
+      console.error(
+        error
+      );
+    }
     loadChat();
     input.focus();
   }
 );
 /*
- * ================================
- * BUTTON
- * ================================
+ * ==========================================
+ * NÚT GỬI
+ * ==========================================
  */
 send.addEventListener(
   "click",
   sendMessage
 );
 /*
- * ================================
+ * ==========================================
  * ENTER
- * ================================
+ * ==========================================
  */
 input.addEventListener(
   "keydown",
@@ -446,9 +519,9 @@ input.addEventListener(
   }
 );
 /*
- * ================================
- * START
- * ================================
+ * ==========================================
+ * KHỞI ĐỘNG
+ * ==========================================
  */
 loadChat();
 input.focus();
