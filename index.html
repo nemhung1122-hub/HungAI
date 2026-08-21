@@ -1,179 +1,151 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8">
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
-  <title>HungAI</title>
-  <style>
-    * {
-      box-sizing: border-box;
-    }
-    body {
-      margin: 0;
-      height: 100vh;
-      background: #0b0f14;
-      color: white;
-      font-family:
-        Arial,
-        sans-serif;
-      display: flex;
-      flex-direction: column;
-    }
-    header {
-      height: 60px;
-      display: flex;
-      align-items: center;
-      padding: 0 18px;
-      background: #111720;
-      border-bottom:
-        1px solid #252d38;
-      font-size: 20px;
-      font-weight: bold;
-    }
-    .status {
-      margin-left: 10px;
-      color: #4ade80;
-      font-size: 12px;
-      font-weight: normal;
-    }
-    #chat {
-      flex: 1;
-      overflow-y: auto;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .message {
-      max-width: 88%;
-      padding:
-        12px 15px;
-      border-radius:
-        16px;
-      line-height: 1.55;
-      white-space:
-        pre-wrap;
-      word-break:
-        break-word;
-    }
-    .user {
-      align-self:
-        flex-end;
-      background:
-        #2563eb;
-    }
-    .ai {
-      align-self:
-        flex-start;
-      background:
-        #1b2430;
-    }
-    .error {
-      align-self:
-        flex-start;
-      background:
-        #7f1d1d;
-    }
-    .bottom {
-      display: flex;
-      gap: 10px;
-      padding: 12px;
-      background:
-        #111720;
-      border-top:
-        1px solid #252d38;
-    }
-    textarea {
-      flex: 1;
-      min-height: 48px;
-      max-height: 150px;
-      resize: none;
-      border:
-        1px solid #303b48;
-      border-radius:
-        14px;
-      background:
-        #0b0f14;
-      color: white;
-      padding: 13px;
-      font-size: 15px;
-      outline: none;
-    }
-    button {
-      width: 80px;
-      border: none;
-      border-radius:
-        14px;
-      background:
-        #2563eb;
-      color: white;
-      font-weight: bold;
-    }
-    button:disabled {
-      opacity: 0.5;
-    }
-    .clear {
-      width: auto;
-      padding:
-        0 12px;
-      background:
-        #252d38;
-      font-size: 12px;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1.0"
+>
+<title>HungAI</title>
+<style>
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  height: 100vh;
+  background: #0b0f14;
+  color: white;
+  font-family: Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+header {
+  height: 60px;
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  background: #111720;
+  border-bottom:
+    1px solid #252d38;
+  font-size: 20px;
+  font-weight: bold;
+}
+.status {
+  margin-left: 10px;
+  color: #4ade80;
+  font-size: 12px;
+  font-weight: normal;
+}
+#chat {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.message {
+  max-width: 88%;
+  padding:
+    12px 15px;
+  border-radius: 16px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.user {
+  align-self: flex-end;
+  background: #2563eb;
+}
+.ai {
+  align-self: flex-start;
+  background: #1b2430;
+}
+.error {
+  align-self: flex-start;
+  background: #7f1d1d;
+}
+.bottom {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  background: #111720;
+  border-top:
+    1px solid #252d38;
+}
+textarea {
+  flex: 1;
+  min-height: 48px;
+  max-height: 150px;
+  resize: none;
+  border:
+    1px solid #303b48;
+  border-radius: 14px;
+  background: #0b0f14;
+  color: white;
+  padding: 13px;
+  font-size: 15px;
+  outline: none;
+}
+button {
+  width: 80px;
+  border: none;
+  border-radius: 14px;
+  background: #2563eb;
+  color: white;
+  font-weight: bold;
+}
+button:disabled {
+  opacity: 0.5;
+}
+.clear {
+  width: auto;
+  padding: 0 12px;
+  background: #252d38;
+  font-size: 12px;
+}
+</style>
 </head>
 <body>
-  <header>
-    HungAI
-    <span class="status">
-      ● Online
-    </span>
-  </header>
-  <main id="chat"></main>
-  <div class="bottom">
-    <textarea
-      id="input"
-      placeholder="Nhập tin nhắn..."
-    ></textarea>
-    <button
-      id="clear"
-      class="clear"
-    >
-      Xóa
-    </button>
-    <button
-      id="send"
-    >
-      Gửi
-    </button>
-  </div>
+<header>
+HungAI
+<span class="status">
+● Online
+</span>
+</header>
+<main id="chat"></main>
+<div class="bottom">
+<textarea
+  id="input"
+  placeholder="Nhập tin nhắn..."
+></textarea>
+<button
+  id="clear"
+  class="clear"
+>
+Xóa
+</button>
+<button id="send">
+Gửi
+</button>
+</div>
 <script>
 const API_URL =
   "https://hungai-api.nemhung1122.workers.dev/";
 const STORAGE_KEY =
   "hungai_history";
 const chat =
-  document.getElementById(
-    "chat"
-  );
+  document.getElementById("chat");
 const input =
-  document.getElementById(
-    "input"
-  );
+  document.getElementById("input");
 const send =
-  document.getElementById(
-    "send"
-  );
+  document.getElementById("send");
 const clear =
-  document.getElementById(
-    "clear"
-  );
-// =================================
+  document.getElementById("clear");
+// ==================================
 // HISTORY
-// =================================
+// ==================================
 let history =
   loadHistory();
 function loadHistory() {
@@ -191,20 +163,22 @@ function loadHistory() {
       return [];
     }
     return data
-      .filter(
-        item =>
+      .filter((item) => {
+        return (
           item &&
           (
             item.role === "user" ||
             item.role === "assistant"
           ) &&
           typeof item.content ===
-            "string"
-      )
+            "string" &&
+          item.content.trim()
+        );
+      })
       .slice(-40);
   } catch (error) {
     console.error(
-      "History error:",
+      "HungAI history error:",
       error
     );
     return [];
@@ -218,22 +192,20 @@ function saveHistory() {
     );
   } catch (error) {
     console.error(
-      "Save history error:",
+      "HungAI save history error:",
       error
     );
   }
 }
-// =================================
+// ==================================
 // MESSAGE
-// =================================
+// ==================================
 function addMessage(
   text,
   type
 ) {
   const div =
-    document.createElement(
-      "div"
-    );
+    document.createElement("div");
   div.className =
     "message " + type;
   div.textContent =
@@ -243,9 +215,9 @@ function addMessage(
     chat.scrollHeight;
   return div;
 }
-// =================================
+// ==================================
 // LOAD CHAT
-// =================================
+// ==================================
 function loadChat() {
   chat.innerHTML = "";
   if (
@@ -268,14 +240,24 @@ function loadChat() {
     );
   }
 }
-// =================================
+// ==================================
 // CALL WORKER
-// =================================
+// ==================================
 async function callHungAI(
   message
 ) {
+  const payload =
+    JSON.stringify({
+      message,
+      history:
+        history.slice(-12)
+    });
   let response;
   try {
+    /*
+     * text/plain:
+     * tránh CORS preflight
+     */
     response =
       await fetch(
         API_URL,
@@ -283,46 +265,43 @@ async function callHungAI(
           method: "POST",
           headers: {
             "Content-Type":
-              "application/json"
+              "text/plain;charset=UTF-8"
           },
-          body:
-            JSON.stringify({
-              message,
-              history:
-                history.slice(-12)
-            })
+          body: payload,
+          cache: "no-store"
         }
       );
   } catch (error) {
     console.error(
-      "FETCH ERROR:",
+      "HungAI FETCH ERROR:",
       error
     );
     throw new Error(
-      "FETCH_ERROR: " +
+      "Không thể kết nối tới Worker. " +
+      "Chi tiết: " +
       (
         error?.message ||
-        "Không thể kết nối Worker."
+        "Load failed"
       )
     );
   }
   const raw =
     await response.text();
   console.log(
-    "HungAI HTTP:",
+    "HungAI status:",
     response.status
   );
   console.log(
-    "HungAI RAW:",
+    "HungAI response:",
     raw
   );
   let data;
   try {
     data =
       JSON.parse(raw);
-  } catch {
+  } catch (error) {
     throw new Error(
-      "Worker trả về dữ liệu không phải JSON. HTTP " +
+      "Worker trả về dữ liệu không hợp lệ. HTTP " +
       response.status
     );
   }
@@ -343,9 +322,9 @@ async function callHungAI(
   }
   return data.reply;
 }
-// =================================
+// ==================================
 // SEND
-// =================================
+// ==================================
 async function sendMessage() {
   const message =
     input.value.trim();
@@ -376,9 +355,6 @@ async function sendMessage() {
       reply,
       "ai"
     );
-    // =============================
-    // SAVE HISTORY
-    // =============================
     history.push({
       role: "user",
       content: message
@@ -414,33 +390,35 @@ async function sendMessage() {
     input.focus();
   }
 }
-// =================================
+// ==================================
 // CLEAR
-// =================================
+// ==================================
 clear.addEventListener(
   "click",
   () => {
     history = [];
-    localStorage.removeItem(
-      STORAGE_KEY
-    );
+    try {
+      localStorage.removeItem(
+        STORAGE_KEY
+      );
+    } catch (_) {}
     loadChat();
     input.focus();
   }
 );
-// =================================
-// SEND BUTTON
-// =================================
+// ==================================
+// BUTTON
+// ==================================
 send.addEventListener(
   "click",
   sendMessage
 );
-// =================================
+// ==================================
 // ENTER
-// =================================
+// ==================================
 input.addEventListener(
   "keydown",
-  event => {
+  (event) => {
     if (
       event.key === "Enter" &&
       !event.shiftKey
@@ -450,9 +428,9 @@ input.addEventListener(
     }
   }
 );
-// =================================
+// ==================================
 // START
-// =================================
+// ==================================
 loadChat();
 input.focus();
 </script>
