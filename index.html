@@ -10,59 +10,226 @@
       box-sizing: border-box;
     }
 
-    body {
+    html, body {
       margin: 0;
+      width: 100%;
+      height: 100%;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: #101114;
-      color: white;
-      height: 100vh;
+      color: #ffffff;
+    }
+
+    body {
       display: flex;
       flex-direction: column;
     }
 
-    header {
-      padding: 16px 18px;
+    .header {
+      height: 60px;
+      display: flex;
+      align-items: center;
+      padding: 0 18px;
       border-bottom: 1px solid #292b30;
-      font-size: 20px;
+      background: #15161a;
+      font-size: 21px;
       font-weight: 700;
+    }
+
+    .status {
+      margin-left: 10px;
+      font-size: 12px;
+      font-weight: 400;
+      color: #65d68a;
     }
 
     #chat {
       flex: 1;
       overflow-y: auto;
-      padding: 16px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }
 
     .message {
-      margin-bottom: 14px;
-      padding: 12px 14px;
-      border-radius: 14px;
       max-width: 85%;
+      padding: 12px 15px;
+      border-radius: 16px;
       line-height: 1.5;
       white-space: pre-wrap;
+      word-break: break-word;
     }
 
     .user {
-      margin-left: auto;
+      align-self: flex-end;
       background: #2563eb;
     }
 
     .ai {
-      margin-right: auto;
+      align-self: flex-start;
       background: #24262b;
+    }
+
+    .welcome {
+      margin: auto;
+      text-align: center;
+      opacity: 0.75;
+      line-height: 1.6;
     }
 
     .input-area {
       display: flex;
       gap: 8px;
       padding: 12px;
+      padding-bottom: calc(12px + env(safe-area-inset-bottom));
       border-top: 1px solid #292b30;
+      background: #15161a;
     }
 
-    input {
+    #message {
       flex: 1;
-      padding: 13px;
-      border: 0;
-      border-radius: 12px;
+      min-width: 0;
+      padding: 13px 15px;
+      border: 1px solid #33363d;
+      border-radius: 14px;
       outline: none;
-     
+      background: #202227;
+      color: white;
+      font-size: 16px;
+    }
+
+    #message:focus {
+      border-color: #2563eb;
+    }
+
+    #send {
+      border: 0;
+      border-radius: 14px;
+      padding: 0 18px;
+      background: #2563eb;
+      color: white;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    #send:disabled {
+      opacity: 0.5;
+    }
+
+    .error {
+      background: #4a2020;
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="header">
+    HungAI
+    <span class="status">Online</span>
+  </header>
+
+  <main id="chat">
+    <div class="welcome" id="welcome">
+      <strong>Xin chào 👋</strong><br>
+      Tôi là HungAI.<br>
+      Hãy gửi tin nhắn để bắt đầu.
+    </div>
+  </main>
+
+  <div class="input-area">
+    <input
+      id="message"
+      type="text"
+      placeholder="Nhắn tin với HungAI..."
+      autocomplete="off"
+    >
+
+    <button id="send">Gửi</button>
+  </div>
+
+  <script>
+    const API_URL = "https://hungai.nemhung1122.workers.dev/";
+
+    const chat = document.getElementById("chat");
+    const welcome = document.getElementById("welcome");
+    const input = document.getElementById("message");
+    const send = document.getElementById("send");
+
+    function addMessage(text, type) {
+      if (welcome) {
+        welcome.remove();
+      }
+
+      const message = document.createElement("div");
+      message.className = "message " + type;
+      message.textContent = text;
+
+      chat.appendChild(message);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const message = input.value.trim();
+
+      if (!message || send.disabled) {
+        return;
+      }
+
+      addMessage(message, "user");
+
+      input.value = "";
+      send.disabled = true;
+      send.textContent = "...";
+
+      try {
+        const response = await fetch(API_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            message: message
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.reply) {
+          addMessage(data.reply, "ai");
+        } else if (data.error) {
+          addMessage(
+            "API lỗi: " + JSON.stringify(data.error),
+            "ai error"
+          );
+        } else {
+          addMessage(
+            "HungAI không nhận được câu trả lời.",
+            "ai error"
+          );
+        }
+
+      } catch (error) {
+        addMessage(
+          "Không kết nối được tới HungAI API.",
+          "ai error"
+        );
+      }
+
+      send.disabled = false;
+      send.textContent = "Gửi";
+      input.focus();
+    }
+
+    send.addEventListener("click", sendMessage);
+
+    input.addEventListener("keydown", function(event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        sendMessage();
+      }
+    });
+  </script>
+
+</body>
+</html>
