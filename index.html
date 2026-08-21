@@ -14,7 +14,7 @@
       margin: 0;
       height: 100vh;
       background: #0b0f14;
-      color: white;
+      color: #fff;
       font-family: Arial, sans-serif;
       display: flex;
       flex-direction: column;
@@ -22,9 +22,9 @@
 
     header {
       height: 60px;
-      padding: 0 18px;
       display: flex;
       align-items: center;
+      padding: 0 18px;
       background: #111720;
       border-bottom: 1px solid #252d38;
       font-size: 20px;
@@ -48,10 +48,10 @@
     }
 
     .message {
-      max-width: 85%;
+      max-width: 88%;
       padding: 12px 15px;
-      border-radius: 15px;
-      line-height: 1.5;
+      border-radius: 16px;
+      line-height: 1.55;
       white-space: pre-wrap;
       word-break: break-word;
     }
@@ -67,7 +67,6 @@
     }
 
     .error {
-      align-self: flex-start;
       background: #7f1d1d;
     }
 
@@ -85,7 +84,7 @@
       max-height: 150px;
       resize: none;
       border: 1px solid #303b48;
-      border-radius: 12px;
+      border-radius: 14px;
       background: #0b0f14;
       color: white;
       padding: 13px;
@@ -96,15 +95,21 @@
     button {
       width: 80px;
       border: none;
-      border-radius: 12px;
+      border-radius: 14px;
       background: #2563eb;
       color: white;
-      font-size: 15px;
       font-weight: bold;
     }
 
     button:disabled {
-      opacity: 0.5;
+      opacity: .5;
+    }
+
+    .clear {
+      width: auto;
+      padding: 0 12px;
+      background: #252d38;
+      font-size: 12px;
     }
   </style>
 </head>
@@ -116,274 +121,320 @@
   <span class="status">● Online</span>
 </header>
 
-<main id="chat">
-  <div class="message ai">
-    Xin chào! Mình là HungAI. 👋
-  </div>
-</main>
+<main id="chat"></main>
 
 <div class="bottom">
+
   <textarea
     id="input"
     placeholder="Nhập tin nhắn..."
   ></textarea>
 
-  <button id="send">Gửi</button>
+  <button
+    id="clear"
+    class="clear"
+  >
+    Xóa
+  </button>
+
+  <button id="send">
+    Gửi
+  </button>
+
 </div>
 
 <script>
 
-  const API_URL =
-    "https://hungai-api.nemhung1122.workers.dev";
+const API_URL =
+  "https://hungai-api.nemhung1122.workers.dev";
 
-  const chat =
-    document.getElementById("chat");
+const chat =
+  document.getElementById("chat");
 
-  const input =
-    document.getElementById("input");
+const input =
+  document.getElementById("input");
 
-  const send =
-    document.getElementById("send");
+const send =
+  document.getElementById("send");
 
-
-  /*
-   * Lịch sử cuộc trò chuyện hiện tại.
-   *
-   * Không lưu API key hay dữ liệu bí mật.
-   */
-
-  let history = [];
+const clear =
+  document.getElementById("clear");
 
 
-  function addMessage(text, type) {
+let history =
+  JSON.parse(
+    localStorage.getItem("hungai_history") ||
+    "[]"
+  );
 
-    const div =
-      document.createElement("div");
 
-    div.className =
-      "message " + type;
+function saveHistory() {
 
-    div.textContent =
-      text;
+  localStorage.setItem(
+    "hungai_history",
+    JSON.stringify(history)
+  );
 
-    chat.appendChild(div);
+}
 
-    chat.scrollTop =
-      chat.scrollHeight;
 
-    return div;
+function addMessage(text, type) {
+
+  const div =
+    document.createElement("div");
+
+  div.className =
+    "message " + type;
+
+  div.textContent =
+    text;
+
+  chat.appendChild(div);
+
+  chat.scrollTop =
+    chat.scrollHeight;
+
+  return div;
+
+}
+
+
+function loadHistory() {
+
+  chat.innerHTML = "";
+
+  if (history.length === 0) {
+
+    addMessage(
+      "Xin chào! Mình là HungAI. 👋",
+      "ai"
+    );
+
+    return;
+  }
+
+  for (const item of history) {
+
+    addMessage(
+      item.content,
+      item.role === "user"
+        ? "user"
+        : "ai"
+    );
+
+  }
+
+}
+
+
+async function sendMessage() {
+
+  const message =
+    input.value.trim();
+
+  if (
+    !message ||
+    send.disabled
+  ) {
+    return;
   }
 
 
-  async function sendMessage() {
+  addMessage(
+    message,
+    "user"
+  );
 
-    const message =
-      input.value.trim();
 
-    if (!message || send.disabled) {
-      return;
+  input.value = "";
+
+  send.disabled = true;
+
+
+  const thinking =
+    addMessage(
+      "HungAI đang suy nghĩ...",
+      "ai"
+    );
+
+
+  try {
+
+    const response =
+      await fetch(
+        API_URL,
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+
+          body: JSON.stringify({
+
+            message,
+
+            history
+
+          })
+
+        }
+      );
+
+
+    const data =
+      await response.json();
+
+
+    thinking.remove();
+
+
+    if (!response.ok) {
+
+      throw new Error(
+        data.error ||
+        "HungAI gặp lỗi."
+      );
+
+    }
+
+
+    if (!data.reply) {
+
+      throw new Error(
+        "Không nhận được câu trả lời."
+      );
+
+    }
+
+
+    let reply =
+      data.reply;
+
+
+    /*
+     * Phòng trường hợp model
+     * trả JSON thay vì text.
+     */
+
+    if (
+      typeof reply === "string"
+    ) {
+
+      try {
+
+        const parsed =
+          JSON.parse(reply);
+
+        const content =
+          parsed
+            ?.choices?.[0]
+            ?.message?.content;
+
+        if (
+          typeof content === "string" &&
+          content.trim()
+        ) {
+
+          reply = content;
+
+        }
+
+      } catch (_) {}
+
     }
 
 
     addMessage(
-      message,
-      "user"
+      reply,
+      "ai"
     );
 
 
-    input.value = "";
-
-    send.disabled = true;
-
-
-    const thinking =
-      addMessage(
-        "HungAI đang suy nghĩ...",
-        "ai"
-      );
+    history.push({
+      role: "user",
+      content: message
+    });
 
 
-    try {
-
-      const response =
-        await fetch(
-          API_URL,
-          {
-            method: "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json"
-            },
-
-            body: JSON.stringify({
-
-              message: message,
-
-              history: history
-
-            })
-          }
-        );
+    history.push({
+      role: "assistant",
+      content: reply
+    });
 
 
-      const data =
-        await response.json();
+    if (history.length > 40) {
 
-
-      thinking.remove();
-
-
-      if (!response.ok) {
-
-        throw new Error(
-          data.error ||
-          "API HungAI gặp lỗi."
-        );
-
-      }
-
-
-      if (!data.reply) {
-
-        throw new Error(
-          "HungAI không nhận được câu trả lời."
-        );
-
-      }
-
-
-      let reply =
-        data.reply;
-
-
-      /*
-       * Nếu Worker trả về JSON
-       * của model thì lấy riêng
-       * message.content.
-       */
-
-      if (
-        typeof reply === "string"
-      ) {
-
-        try {
-
-          const parsed =
-            JSON.parse(reply);
-
-          const content =
-            parsed
-              ?.choices?.[0]
-              ?.message?.content;
-
-          if (
-            typeof content === "string" &&
-            content.trim()
-          ) {
-
-            reply =
-              content;
-
-          }
-
-        } catch (error) {
-          // Reply đã là text bình thường.
-        }
-
-      }
-
-
-      if (
-        typeof reply === "object"
-      ) {
-
-        reply =
-          reply
-            ?.choices?.[0]
-            ?.message?.content ||
-          "HungAI không có câu trả lời.";
-
-      }
-
-
-      addMessage(
-        reply,
-        "ai"
-      );
-
-
-      /*
-       * Lưu cả câu hỏi và câu trả lời
-       * để câu hỏi tiếp theo có ngữ cảnh.
-       */
-
-      history.push({
-        role: "user",
-        content: message
-      });
-
-      history.push({
-        role: "assistant",
-        content: reply
-      });
-
-
-      /*
-       * Chỉ giữ 20 tin nhắn gần nhất
-       * để tránh gửi quá nhiều dữ liệu.
-       */
-
-      if (history.length > 20) {
-        history =
-          history.slice(-20);
-      }
-
-
-    } catch (error) {
-
-      thinking.remove();
-
-      addMessage(
-        "Lỗi: " +
-        error.message,
-        "error"
-      );
+      history =
+        history.slice(-40);
 
     }
 
 
-    send.disabled =
-      false;
+    saveHistory();
 
-    input.focus();
+
+  } catch (error) {
+
+    thinking.remove();
+
+    addMessage(
+      "Lỗi: " +
+      error.message,
+      "error"
+    );
 
   }
 
 
-  send.addEventListener(
-    "click",
-    sendMessage
-  );
+  send.disabled = false;
+
+  input.focus();
+
+}
 
 
-  input.addEventListener(
-    "keydown",
-    function(event) {
+send.addEventListener(
+  "click",
+  sendMessage
+);
 
-      if (
-        event.key === "Enter" &&
-        !event.shiftKey
-      ) {
 
-        event.preventDefault();
+clear.addEventListener(
+  "click",
+  function() {
 
-        sendMessage();
+    history = [];
 
-      }
+    saveHistory();
+
+    loadHistory();
+
+  }
+);
+
+
+input.addEventListener(
+  "keydown",
+  function(event) {
+
+    if (
+      event.key === "Enter" &&
+      !event.shiftKey
+    ) {
+
+      event.preventDefault();
+
+      sendMessage();
 
     }
-  );
+
+  }
+);
+
+
+loadHistory();
 
 </script>
 
