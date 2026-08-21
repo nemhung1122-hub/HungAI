@@ -6,256 +6,266 @@ import {
 
 import {
   getDayEvents,
+  getOfficialHolidays,
   formatDayEvents
 } from "./holidays.js";
 
-
-const MODEL =
-  "@cf/zai-org/glm-4.7-flash";
-
+const MODEL = "@cf/zai-org/glm-4.7-flash";
 
 export default {
-
   async fetch(request, env) {
 
     const cors = {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods":
-        "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers":
-        "Content-Type"
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type"
     };
 
-
     if (request.method === "OPTIONS") {
-
       return new Response(null, {
         headers: cors
       });
-
     }
-
 
     if (request.method === "GET") {
-
-      return json(
-        {
-          status: "online",
-          name: "HungAI",
-          model: MODEL,
-          version: "2.0"
-        },
-        cors
-      );
-
+      return json({
+        status: "online",
+        name: "HungAI",
+        version: "2.1",
+        model: MODEL
+      }, cors);
     }
 
-
     if (request.method !== "POST") {
-
       return json(
-        {
-          error: "POST only"
-        },
+        { error: "POST only" },
         cors,
         405
       );
-
     }
-
 
     try {
 
-      const body =
-        await request.json();
-
+      const body = await request.json();
 
       const message =
         typeof body?.message === "string"
           ? body.message.trim()
           : "";
 
-
       const history =
         Array.isArray(body?.history)
           ? body.history
-              .filter(
-                item =>
-                  item &&
-                  (
-                    item.role === "user" ||
-                    item.role === "assistant"
-                  ) &&
-                  typeof item.content === "string"
+              .filter(item =>
+                item &&
+                (
+                  item.role === "user" ||
+                  item.role === "assistant"
+                ) &&
+                typeof item.content === "string"
               )
               .slice(-20)
           : [];
 
-
       if (!message) {
-
         return json(
-          {
-            error: "Tin nhắn trống."
-          },
+          { error: "Tin nhắn trống." },
           cors,
           400
         );
-
       }
 
-
       /*
-       * =========================
-       * THỜI GIAN
-       * =========================
+       * =================================
+       * THỜI GIAN THẬT
+       * =================================
        */
 
-      const current =
-        getVietnamDate();
-
+      const current = getVietnamDate();
 
       /*
-       * =========================
-       * NGÀY ĐẶC BIỆT
-       * =========================
+       * =================================
+       * ƯU TIÊN KIỂM TRA NGÀY LỄ
+       *
+       * Phải chạy TRƯỚC kiểm tra
+       * "hôm nay là ngày gì".
+       * =================================
        */
 
-      const events =
-        getDayEvents(
-          current.day,
-          current.month
-        );
+      const holidayQuestion =
+        isHolidayQuestion(message);
 
+      if (holidayQuestion) {
 
-      /*
-       * =========================
-       * CÂU HỎI LỊCH
-       * =========================
-       */
+        const target =
+          getTargetDate(
+            message,
+            current
+          );
 
-      const calendarAnswer =
-        getCalendarAnswer(
-          message,
-          current
-        );
+        const official =
+          getOfficialHolidays(
+            target.day,
+            target.month
+          );
 
+        const allEvents =
+          getDayEvents(
+            target.day,
+            target.month
+          );
 
-      if (calendarAnswer) {
+        const label =
+          getDateLabel(
+            message
+          );
 
-        return json(
-          {
-            reply:
-              calendarAnswer,
+        let reply =
+          `📅 ${label}: ` +
+          `${target.weekday}, ` +
+          `${pad(target.day)}/` +
+          `${pad(target.month)}/` +
+          `${target.year}\n\n`;
 
-            calendar:
-              current,
+        if (official.length > 0) {
 
-            events
-          },
-          cors
-        );
+          reply +=
+            official
+              .map(
+                event =>
+                  `🇻🇳 Ngày lễ chính thức: ${event.name}`
+              )
+              .join("\n");
 
+        } else {
+
+          reply +=
+            "🇻🇳 Không phải ngày lễ chính thức " +
+            "ở Việt Nam.";
+
+        }
+
+        /*
+         * Nếu người dùng hỏi "ngày gì"
+         * hoặc "ngày đặc biệt gì",
+         * cho thêm các ngày kỷ niệm/
+         * ngày phổ biến.
+         */
+
+        if (
+          message.toLowerCase().includes(
+            "ngày đặc biệt"
+          ) ||
+          message.toLowerCase().includes(
+            "ngày gì"
+          )
+        ) {
+
+          const nonOfficial =
+            allEvents.filter(
+              event =>
+                event.type !== "official"
+            );
+
+          if (nonOfficial.length > 0) {
+
+            reply +=
+              "\n\n" +
+              formatDayEvents(
+                nonOfficial
+              );
+
+          }
+
+        }
+
+        return json({
+          reply,
+          calendar: target,
+          events: allEvents
+        }, cors);
       }
 
-
       /*
-       * =========================
-       * CÂU HỎI NGÀY ĐẶC BIỆT
-       * =========================
+       * =================================
+       * CÂU HỎI NGÀY / GIỜ
+       * =================================
        */
 
-      if (
-        isSpecialDayQuestion(message)
-      ) {
+      const calendarQuestion =
+        isCalendarQuestion(message);
 
-        return json(
-          {
-            reply:
-              buildSpecialDayAnswer(
-                current,
-                events
-              ),
+      if (calendarQuestion) {
 
-            calendar:
-              current,
+        const target =
+          getTargetDate(
+            message,
+            current
+          );
 
-            events
-          },
-          cors
-        );
+        let reply =
+          `📅 ${getDateLabel(message)} ` +
+          `là ${target.weekday}, ` +
+          `ngày ${pad(target.day)}/` +
+          `${pad(target.month)}/` +
+          `${target.year}.`;
 
+        if (
+          isTimeQuestion(message) &&
+          isTodayQuestion(message)
+        ) {
+
+          reply +=
+            `\n🕐 Bây giờ là ` +
+            `${formatVietnamTime(current)}.`;
+
+        }
+
+        return json({
+          reply,
+          calendar: target
+        }, cors);
       }
 
-
       /*
-       * =========================
+       * =================================
        * AI
-       * =========================
+       * =================================
        */
 
       const systemPrompt = `
-
 Bạn là HungAI, trợ lý AI riêng của người dùng.
 
-TÍNH CÁCH:
-
-- Thân thiện.
-- Tự nhiên.
-- Nói tiếng Việt khi người dùng nói tiếng Việt.
-- Trả lời rõ ràng.
-- Không vòng vo.
-- Không bịa thông tin.
-
-THỜI GIAN HỆ THỐNG:
-
-Ngày:
+Ngày hiện tại:
 ${formatVietnamDate(current)}
 
-Giờ:
+Giờ hiện tại:
 ${formatVietnamTime(current)}
 
 Múi giờ:
 Việt Nam (UTC+7)
 
-NGÀY ĐẶC BIỆT HÔM NAY:
+QUY TẮC:
 
-${formatDayEvents(events)}
-
-QUY TẮC QUAN TRỌNG:
-
-1. Không tự đoán ngày tháng.
-2. Không tự tính thứ.
-3. Nếu được hỏi ngày/giờ hiện tại,
-   dữ liệu hệ thống ở trên là nguồn chính xác.
-4. Không gọi một ngày Internet là
-   "ngày lễ quốc gia" nếu nó chỉ là
-   ngày kỷ niệm hoặc ngày phổ biến.
-5. Nếu không biết thông tin,
-   hãy nói rằng không biết.
-6. Không bịa nguồn hoặc sự kiện.
-
+- Trả lời bằng tiếng Việt nếu người dùng nói tiếng Việt.
+- Không tự đoán ngày tháng.
+- Không tự tính thứ.
+- Không bịa thông tin.
+- Nếu không biết thì nói rõ là không biết.
+- Không gọi ngày Internet là ngày lễ quốc gia.
 `;
 
-
       const messages = [
-
         {
           role: "system",
-          content:
-            systemPrompt
+          content: systemPrompt
         },
-
         ...history,
-
         {
           role: "user",
-          content:
-            message
+          content: message
         }
-
       ];
-
 
       const result =
         await env.AI.run(
@@ -265,35 +275,17 @@ QUY TẮC QUAN TRỌNG:
           }
         );
 
+      let reply = result?.response;
 
-      let reply =
-        result?.response;
-
-
-      if (
-        typeof reply !== "string"
-      ) {
-
-        reply =
-          JSON.stringify(
-            reply ?? result
-          );
-
+      if (typeof reply !== "string") {
+        reply = JSON.stringify(
+          reply ?? result
+        );
       }
 
-
-      return json(
-        {
-          reply,
-
-          calendar:
-            current,
-
-          events
-        },
-        cors
-      );
-
+      return json({
+        reply
+      }, cors);
 
     } catch (error) {
 
@@ -301,7 +293,6 @@ QUY TẮC QUAN TRỌNG:
         "HungAI error:",
         error
       );
-
 
       return json(
         {
@@ -312,21 +303,64 @@ QUY TẮC QUAN TRỌNG:
         cors,
         500
       );
-
     }
-
   }
-
 };
 
 
 /*
- * =====================================
- * LỊCH
- * =====================================
+ * =================================
+ * KIỂM TRA CÂU HỎI NGÀY LỄ
+ * =================================
  */
 
-function getCalendarAnswer(
+function isHolidayQuestion(text) {
+
+  const q =
+    text.toLowerCase();
+
+  return (
+    q.includes("ngày lễ") ||
+    q.includes("lễ gì") ||
+    q.includes("có lễ gì") ||
+    q.includes("ngày đặc biệt")
+  );
+}
+
+
+/*
+ * =================================
+ * KIỂM TRA CÂU HỎI NGÀY
+ * =================================
+ */
+
+function isCalendarQuestion(text) {
+
+  const q =
+    text.toLowerCase();
+
+  return (
+    q.includes("hôm nay") ||
+    q.includes("hôm qua") ||
+    q.includes("ngày mai") ||
+    q.includes("thứ mấy") ||
+    q.includes("ngày mấy") ||
+    q.includes("ngày bao nhiêu") ||
+    q.includes("ngày tháng năm") ||
+    q.includes("bây giờ") ||
+    q.includes("mấy giờ") ||
+    q.includes("giờ hiện tại")
+  );
+}
+
+
+/*
+ * =================================
+ * XÁC ĐỊNH NGÀY CẦN HỎI
+ * =================================
+ */
+
+function getTargetDate(
   text,
   current
 ) {
@@ -334,191 +368,106 @@ function getCalendarAnswer(
   const q =
     text.toLowerCase();
 
-
-  let target =
-    null;
-
-  let label =
-    "";
-
-
   if (
     q.includes("hôm qua")
   ) {
 
-    target =
-      shiftDate(
-        current,
-        -1
-      );
-
-    label =
-      "Hôm qua";
+    return shiftDate(
+      current,
+      -1
+    );
 
   }
 
-
-  else if (
-    q.includes("hôm nay")
-  ) {
-
-    target =
-      current;
-
-    label =
-      "Hôm nay";
-
-  }
-
-
-  else if (
+  if (
     q.includes("ngày mai") ||
     q === "mai" ||
-    q.includes("mai là ngày")
+    q.includes("mai là")
   ) {
 
-    target =
-      shiftDate(
-        current,
-        1
-      );
-
-    label =
-      "Ngày mai";
+    return shiftDate(
+      current,
+      1
+    );
 
   }
 
-
-  else {
-
-    return null;
-
-  }
-
-
-  /*
-   * Chỉ xử lý nếu thực sự hỏi về
-   * ngày / thứ / giờ.
-   */
-
-  const asksDate =
-    q.includes("ngày") ||
-    q.includes("thứ") ||
-    q.includes("hôm qua") ||
-    q.includes("hôm nay") ||
-    q.includes("ngày mai");
-
-
-  const asksTime =
-    q.includes("giờ") ||
-    q.includes("mấy giờ") ||
-    q.includes("bây giờ");
-
-
-  if (
-    !asksDate &&
-    !asksTime
-  ) {
-
-    return null;
-
-  }
-
-
-  let answer =
-    `${label} là ` +
-    `${target.weekday}, ` +
-    `ngày ${pad(target.day)}/` +
-    `${pad(target.month)}/` +
-    `${target.year}.`;
-
-
-  if (
-    target === current &&
-    asksTime
-  ) {
-
-    answer +=
-      `\n🕐 Bây giờ là ` +
-      `${formatVietnamTime(current)}.`;
-
-  }
-
-
-  return answer;
-
+  return current;
 }
 
 
 /*
- * =====================================
- * NGÀY ĐẶC BIỆT
- * =====================================
+ * =================================
+ * TÊN NGÀY
+ * =================================
  */
 
-function isSpecialDayQuestion(
-  text
-) {
+function getDateLabel(text) {
 
   const q =
     text.toLowerCase();
 
-
-  return (
-    q.includes("ngày lễ") ||
-    q.includes("ngày đặc biệt") ||
-    q.includes("hôm nay có lễ") ||
-    q.includes("hôm nay là ngày gì")
-  );
-
-}
-
-
-function buildSpecialDayAnswer(
-  current,
-  events
-) {
-
-  let answer =
-    `📅 ${formatVietnamDate(current)}\n\n`;
-
-
-  if (!events.length) {
-
-    answer +=
-      "🎉 Hôm nay không có " +
-      "ngày đặc biệt phổ biến " +
-      "trong dữ liệu HungAI.";
-
-    return answer;
-
+  if (q.includes("hôm qua")) {
+    return "Hôm qua";
   }
 
+  if (
+    q.includes("ngày mai") ||
+    q === "mai" ||
+    q.includes("mai là")
+  ) {
+    return "Ngày mai";
+  }
 
-  answer +=
-    formatDayEvents(events);
-
-
-  return answer;
-
+  return "Hôm nay";
 }
 
 
 /*
- * =====================================
+ * =================================
+ * CÓ PHẢI CÂU HỎI GIỜ?
+ * =================================
+ */
+
+function isTimeQuestion(text) {
+
+  const q =
+    text.toLowerCase();
+
+  return (
+    q.includes("mấy giờ") ||
+    q.includes("bây giờ") ||
+    q.includes("giờ hiện tại") ||
+    q.includes("thời gian hiện tại")
+  );
+}
+
+
+function isTodayQuestion(text) {
+
+  const q =
+    text.toLowerCase();
+
+  return (
+    q.includes("hôm nay") ||
+    (
+      !q.includes("hôm qua") &&
+      !q.includes("ngày mai")
+    )
+  );
+}
+
+
+/*
+ * =================================
  * CỘNG / TRỪ NGÀY
- * =====================================
+ * =================================
  */
 
 function shiftDate(
   current,
   amount
 ) {
-
-  /*
-   * Dùng UTC để tránh lỗi khi
-   * đổi ngày vào thời điểm giao ngày.
-   */
 
   const date =
     new Date(
@@ -529,12 +478,9 @@ function shiftDate(
       )
     );
 
-
   date.setUTCDate(
-    date.getUTCDate() +
-    amount
+    date.getUTCDate() + amount
   );
-
 
   const year =
     date.getUTCFullYear();
@@ -545,50 +491,33 @@ function shiftDate(
   const day =
     date.getUTCDate();
 
-
-  const weekday =
-    [
-      "Chủ Nhật",
-      "Thứ Hai",
-      "Thứ Ba",
-      "Thứ Tư",
-      "Thứ Năm",
-      "Thứ Sáu",
-      "Thứ Bảy"
-    ][
-      date.getUTCDay()
-    ];
-
+  const weekdays = [
+    "Chủ Nhật",
+    "Thứ Hai",
+    "Thứ Ba",
+    "Thứ Tư",
+    "Thứ Năm",
+    "Thứ Sáu",
+    "Thứ Bảy"
+  ];
 
   return {
     year,
     month,
     day,
-    weekday
+    weekday:
+      weekdays[
+        date.getUTCDay()
+      ]
   };
-
 }
 
 
-function pad(
-  number
-) {
-
-  return String(
-    number
-  ).padStart(
-    2,
-    "0"
-  );
-
+function pad(number) {
+  return String(number)
+    .padStart(2, "0");
 }
 
-
-/*
- * =====================================
- * JSON RESPONSE
- * =====================================
- */
 
 function json(
   data,
@@ -600,14 +529,11 @@ function json(
     JSON.stringify(data),
     {
       status,
-
       headers: {
         "Content-Type":
           "application/json; charset=utf-8",
-
         ...cors
       }
     }
   );
-
 }
