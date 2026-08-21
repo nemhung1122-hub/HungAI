@@ -16,7 +16,8 @@ export default {
       return new Response(
         JSON.stringify({
           status: "online",
-          message: "HungAI đang hoạt động."
+          message: "HungAI đang hoạt động.",
+          model: "@cf/zai-org/glm-4.7-flash"
         }),
         {
           headers: {
@@ -30,7 +31,7 @@ export default {
     if (request.method !== "POST") {
       return new Response(
         JSON.stringify({
-          error: "Method not allowed"
+          error: "Chỉ hỗ trợ POST."
         }),
         {
           status: 405,
@@ -44,12 +45,12 @@ export default {
 
     try {
       const body = await request.json();
-      const message = body.message;
+      const message = body?.message;
 
-      if (!message) {
+      if (!message || typeof message !== "string") {
         return new Response(
           JSON.stringify({
-            error: "Thiếu message"
+            error: "Thiếu message."
           }),
           {
             status: 400,
@@ -68,7 +69,7 @@ export default {
             {
               role: "system",
               content:
-                "Bạn là HungAI, một trợ lý AI thân thiện, thông minh và trả lời bằng tiếng Việt."
+                "Bạn là HungAI, một trợ lý AI riêng của người dùng. Hãy trả lời tự nhiên, hữu ích và bằng tiếng Việt."
             },
             {
               role: "user",
@@ -78,11 +79,14 @@ export default {
         }
       );
 
+      // Trả nguyên kết quả của Workers AI để frontend xử lý đúng cấu trúc.
       return new Response(
         JSON.stringify({
-          reply: result.response || "HungAI không nhận được câu trả lời."
+          success: true,
+          result: result
         }),
         {
+          status: 200,
           headers: {
             "Content-Type": "application/json",
             ...corsHeaders
@@ -93,7 +97,8 @@ export default {
     } catch (error) {
       return new Response(
         JSON.stringify({
-          error: error.message || "Lỗi máy chủ HungAI"
+          success: false,
+          error: error?.message || String(error)
         }),
         {
           status: 500,
@@ -106,4 +111,3 @@ export default {
     }
   }
 };
-// Deploy trigger
