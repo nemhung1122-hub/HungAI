@@ -1,5 +1,3 @@
-HungAI — index.html
-
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -8,27 +6,39 @@ HungAI — index.html
     name="viewport"
     content="width=device-width, initial-scale=1.0"
   >
+  <meta
+    name="theme-color"
+    content="#0b0f14"
+  >
   <title>HungAI</title>
   <style>
     * {
       box-sizing: border-box;
     }
+    html,
     body {
       margin: 0;
-      height: 100vh;
+      padding: 0;
+      width: 100%;
+      height: 100%;
       background: #0b0f14;
-      color: #fff;
+      color: #ffffff;
       font-family: Arial, sans-serif;
+    }
+    body {
+      min-height: 100vh;
       display: flex;
       flex-direction: column;
     }
     header {
       height: 60px;
+      min-height: 60px;
       display: flex;
       align-items: center;
       padding: 0 18px;
       background: #111720;
-      border-bottom: 1px solid #252d38;
+      border-bottom:
+        1px solid #252d38;
       font-size: 20px;
       font-weight: bold;
     }
@@ -41,6 +51,7 @@ HungAI — index.html
     #chat {
       flex: 1;
       overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
       padding: 20px;
       display: flex;
       flex-direction: column;
@@ -71,31 +82,43 @@ HungAI — index.html
       gap: 10px;
       padding: 12px;
       background: #111720;
-      border-top: 1px solid #252d38;
+      border-top:
+        1px solid #252d38;
+      padding-bottom:
+        calc(
+          12px + env(safe-area-inset-bottom)
+        );
     }
     textarea {
       flex: 1;
       min-height: 48px;
       max-height: 150px;
       resize: none;
-      border: 1px solid #303b48;
+      border:
+        1px solid #303b48;
       border-radius: 14px;
       background: #0b0f14;
-      color: white;
+      color: #ffffff;
       padding: 13px;
       font-size: 15px;
       outline: none;
+      font-family: Arial, sans-serif;
+    }
+    textarea:focus {
+      border-color: #2563eb;
     }
     button {
       width: 80px;
       border: none;
       border-radius: 14px;
       background: #2563eb;
-      color: white;
+      color: #ffffff;
       font-weight: bold;
+      cursor: pointer;
     }
     button:disabled {
       opacity: 0.5;
+      cursor: default;
     }
     .clear {
       width: auto;
@@ -108,21 +131,32 @@ HungAI — index.html
 <body>
 <header>
   HungAI
-  <span class="status">● Online</span>
+  <span
+    id="status"
+    class="status"
+  >
+    ● Online
+  </span>
 </header>
 <main id="chat"></main>
 <div class="bottom">
   <textarea
     id="input"
     placeholder="Nhập tin nhắn..."
+    autocomplete="off"
+    spellcheck="false"
   ></textarea>
   <button
     id="clear"
     class="clear"
+    type="button"
   >
     Xóa
   </button>
-  <button id="send">
+  <button
+    id="send"
+    type="button"
+  >
     Gửi
   </button>
 </div>
@@ -136,11 +170,6 @@ const API_URL =
   "https://hungai-api.nemhung1122.workers.dev";
 const STORAGE_KEY =
   "hungai_history";
-/*
- * ==========================================
- * DOM
- * ==========================================
- */
 const chat =
   document.getElementById("chat");
 const input =
@@ -149,12 +178,15 @@ const send =
   document.getElementById("send");
 const clear =
   document.getElementById("clear");
+const status =
+  document.getElementById("status");
 /*
  * ==========================================
- * HISTORY
+ * LỊCH SỬ
  * ==========================================
  */
-let history = loadSavedHistory();
+let history =
+  loadSavedHistory();
 function loadSavedHistory() {
   try {
     const raw =
@@ -184,13 +216,9 @@ function loadSavedHistory() {
       .slice(-40);
   } catch (error) {
     console.warn(
-      "HungAI: Không đọc được lịch sử cũ.",
+      "HungAI: Không đọc được lịch sử.",
       error
     );
-    /*
-     * Nếu localStorage bị hỏng,
-     * xóa dữ liệu lỗi để app vẫn mở được.
-     */
     try {
       localStorage.removeItem(
         STORAGE_KEY
@@ -268,106 +296,239 @@ function loadHistory() {
 }
 /*
  * ==========================================
- * KIỂM TRA API
+ * GỌI HUNGAI
+ *
+ * Dùng XMLHttpRequest thay fetch().
+ *
+ * Lý do:
+ * Trên một số phiên bản Safari/iOS,
+ * fetch() có thể trả "Load failed"
+ * dù request đã tới Cloudflare.
  * ==========================================
  */
-async function requestHungAI(
+function requestHungAI(
   message,
   chatHistory
 ) {
-  const controller =
-    new AbortController();
-  /*
-   * Nếu server không trả lời
-   * trong 60 giây thì hủy request.
-   */
-  const timeout =
-    setTimeout(
-      () => controller.abort(),
-      60000
-    );
-  try {
-    const response =
-      await fetch(
-        API_URL,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json"
-          },
-          body: JSON.stringify({
-            message,
-            /*
-             * Chỉ gửi 12 tin gần nhất.
-             */
-            history:
-              chatHistory
-                .filter(item =>
-                  item &&
-                  (
-                    item.role === "user" ||
-                    item.role === "assistant"
-                  ) &&
-                  typeof item.content === "string"
-                )
+  return new Promise(
+    function(resolve, reject) {
+      const xhr =
+        new XMLHttpRequest();
+      let finished = false;
+      /*
+       * 60 giây timeout.
+       */
+      xhr.timeout = 60000;
+      /*
+       * ======================================
+       * TIMEOUT
+       * ======================================
+       */
+      xhr.ontimeout =
+        function() {
+          if (finished) {
+            return;
+          }
+          finished = true;
+          reject(
+            new Error(
+              "HungAI phản hồi quá lâu. Hãy thử lại."
+            )
+          );
+        };
+      /*
+       * ======================================
+       * NETWORK ERROR
+       * ======================================
+       */
+      xhr.onerror =
+        function() {
+          if (finished) {
+            return;
+          }
+          finished = true;
+          reject(
+            new Error(
+              "Không thể kết nối tới máy chủ HungAI. Request không hoàn tất."
+            )
+          );
+        };
+      /*
+       * ======================================
+       * ABORT
+       * ======================================
+       */
+      xhr.onabort =
+        function() {
+          if (finished) {
+            return;
+          }
+          finished = true;
+          reject(
+            new Error(
+              "Kết nối tới HungAI đã bị hủy."
+            )
+          );
+        };
+      /*
+       * ======================================
+       * RESPONSE
+       * ======================================
+       */
+      xhr.onload =
+        function() {
+          if (finished) {
+            return;
+          }
+          finished = true;
+          const statusCode =
+            xhr.status;
+          const responseText =
+            xhr.responseText || "";
+          /*
+           * HTTP lỗi
+           */
+          if (
+            statusCode < 200 ||
+            statusCode >= 300
+          ) {
+            let errorMessage =
+              "Máy chủ lỗi HTTP " +
+              statusCode +
+              ".";
+            try {
+              const errorData =
+                JSON.parse(
+                  responseText
+                );
+              if (
+                errorData &&
+                typeof errorData.error ===
+                  "string"
+              ) {
+                errorMessage =
+                  errorData.error;
+              }
+            } catch (_) {}
+            reject(
+              new Error(
+                errorMessage
+              )
+            );
+            return;
+          }
+          /*
+           * JSON
+           */
+          let data;
+          try {
+            data =
+              JSON.parse(
+                responseText
+              );
+          } catch (_) {
+            reject(
+              new Error(
+                "Máy chủ HungAI trả về dữ liệu không hợp lệ."
+              )
+            );
+            return;
+          }
+          /*
+           * Kiểm tra reply
+           */
+          if (
+            !data ||
+            typeof data.reply !== "string" ||
+            !data.reply.trim()
+          ) {
+            reject(
+              new Error(
+                "HungAI chưa nhận được câu trả lời từ mô hình."
+              )
+            );
+            return;
+          }
+          resolve(
+            data.reply
+          );
+        };
+      /*
+       * ======================================
+       * OPEN
+       * ======================================
+       */
+      try {
+        xhr.open(
+          "POST",
+          API_URL,
+          true
+        );
+        /*
+         * Không cache request.
+         */
+        xhr.setRequestHeader(
+          "Content-Type",
+          "application/json"
+        );
+        xhr.setRequestHeader(
+          "Accept",
+          "application/json"
+        );
+        /*
+         * ====================================
+         * HISTORY
+         * ====================================
+         */
+        const safeHistory =
+          Array.isArray(chatHistory)
+            ? chatHistory
+                .filter(item => {
+                  return (
+                    item &&
+                    (
+                      item.role === "user" ||
+                      item.role === "assistant"
+                    ) &&
+                    typeof item.content ===
+                      "string"
+                  );
+                })
                 .slice(-12)
-          }),
-          signal:
-            controller.signal
+            : [];
+        /*
+         * ====================================
+         * BODY
+         * ====================================
+         */
+        const body =
+          JSON.stringify({
+            message,
+            history:
+              safeHistory
+          });
+        /*
+         * ====================================
+         * SEND
+         * ====================================
+         */
+        xhr.send(
+          body
+        );
+      } catch (error) {
+        if (finished) {
+          return;
         }
-      );
-    /*
-     * Đọc response an toàn.
-     */
-    const text =
-      await response.text();
-    let data = null;
-    try {
-      data =
-        text
-          ? JSON.parse(text)
-          : null;
-    } catch (_) {
-      throw new Error(
-        "Máy chủ trả về dữ liệu không hợp lệ."
-      );
+        finished = true;
+        reject(
+          new Error(
+            error?.message ||
+            "Không thể gửi yêu cầu tới HungAI."
+          )
+        );
+      }
     }
-    if (!response.ok) {
-      throw new Error(
-        data?.error ||
-        `Máy chủ lỗi HTTP ${response.status}.`
-      );
-    }
-    if (
-      !data ||
-      typeof data.reply !== "string" ||
-      !data.reply.trim()
-    ) {
-      throw new Error(
-        "HungAI chưa nhận được câu trả lời từ mô hình."
-      );
-    }
-    return data.reply;
-  } catch (error) {
-    if (
-      error?.name === "AbortError"
-    ) {
-      throw new Error(
-        "HungAI phản hồi quá lâu. Hãy thử lại."
-      );
-    }
-    if (
-      error instanceof TypeError
-    ) {
-      throw new Error(
-        "Không thể kết nối tới máy chủ HungAI. Hãy kiểm tra mạng hoặc thử lại."
-      );
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-  }
+  );
 }
 /*
  * ==========================================
@@ -384,22 +545,30 @@ async function sendMessage() {
     return;
   }
   /*
-   * Hiển thị câu người dùng.
+   * Hiển thị user.
    */
   addMessage(
     message,
     "user"
   );
   /*
-   * Xóa ô nhập.
+   * Xóa input.
    */
   input.value = "";
   /*
-   * Khóa nút gửi.
+   * Khóa nút.
    */
   send.disabled = true;
+  clear.disabled = true;
   /*
-   * Hiển thị trạng thái.
+   * Trạng thái.
+   */
+  status.textContent =
+    "● Đang xử lý...";
+  status.style.color =
+    "#facc15";
+  /*
+   * Thinking.
    */
   const thinking =
     addMessage(
@@ -408,33 +577,34 @@ async function sendMessage() {
     );
   try {
     /*
-     * Lưu history hiện tại
-     * trước khi thêm câu mới.
+     * Chỉ gửi lịch sử CŨ.
      *
-     * Như vậy Worker không nhận
-     * câu user bị gửi hai lần.
+     * Câu user hiện tại chưa thêm vào
+     * history cho tới khi AI trả lời.
      */
     const historyForRequest =
       history.slice(-12);
+    /*
+     * Gọi API.
+     */
     const reply =
       await requestHungAI(
         message,
         historyForRequest
       );
     /*
-     * Xóa trạng thái đang suy nghĩ.
+     * Xóa thinking.
      */
     thinking.remove();
     /*
-     * Hiển thị câu trả lời.
+     * Hiển thị AI.
      */
     addMessage(
       reply,
       "ai"
     );
     /*
-     * Chỉ lưu lịch sử
-     * sau khi AI trả lời thành công.
+     * Lưu lịch sử.
      */
     history.push({
       role: "user",
@@ -445,7 +615,7 @@ async function sendMessage() {
       content: reply
     });
     /*
-     * Giới hạn lịch sử.
+     * Giới hạn 40 message.
      */
     if (
       history.length > 40
@@ -454,13 +624,20 @@ async function sendMessage() {
         history.slice(-40);
     }
     saveHistory();
+    /*
+     * Online.
+     */
+    status.textContent =
+      "● Online";
+    status.style.color =
+      "#4ade80";
   } catch (error) {
     /*
-     * Xóa "đang suy nghĩ".
+     * Xóa thinking.
      */
     thinking.remove();
     /*
-     * Hiển thị lỗi.
+     * Hiển thị lỗi thật.
      */
     addMessage(
       "Lỗi: " +
@@ -470,8 +647,18 @@ async function sendMessage() {
       ),
       "error"
     );
+    /*
+     * Trạng thái lỗi.
+     */
+    status.textContent =
+      "● Lỗi kết nối";
+    status.style.color =
+      "#ef4444";
   } finally {
-    send.disabled = false;
+    send.disabled =
+      false;
+    clear.disabled =
+      false;
     input.focus();
   }
 }
