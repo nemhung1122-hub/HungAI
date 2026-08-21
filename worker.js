@@ -12,6 +12,16 @@ import {
 
 const MODEL = "@cf/zai-org/glm-4.7-flash";
 
+const WEEKDAYS = [
+  "Chủ Nhật",
+  "Thứ Hai",
+  "Thứ Ba",
+  "Thứ Tư",
+  "Thứ Năm",
+  "Thứ Sáu",
+  "Thứ Bảy"
+];
+
 export default {
   async fetch(request, env) {
 
@@ -31,7 +41,7 @@ export default {
       return json({
         status: "online",
         name: "HungAI",
-        version: "2.1",
+        version: "3.0",
         model: MODEL
       }, cors);
     }
@@ -76,31 +86,42 @@ export default {
       }
 
       /*
-       * =================================
-       * THỜI GIAN THẬT
-       * =================================
+       * ================================
+       * NGÀY HIỆN TẠI
+       * ================================
        */
 
       const current = getVietnamDate();
 
+
       /*
-       * =================================
-       * ƯU TIÊN KIỂM TRA NGÀY LỄ
-       *
-       * Phải chạy TRƯỚC kiểm tra
-       * "hôm nay là ngày gì".
-       * =================================
+       * ================================
+       * PHÂN TÍCH CÂU HỎI LỊCH
+       * ================================
        */
 
-      const holidayQuestion =
-        isHolidayQuestion(message);
+      const calendarQuery =
+        parseCalendarQuery(
+          message,
+          current
+        );
 
-      if (holidayQuestion) {
+
+      /*
+       * ================================
+       * NẾU LÀ CÂU HỎI NGÀY / LỄ
+       * ================================
+       */
+
+      if (calendarQuery) {
 
         const target =
-          getTargetDate(
-            message,
-            current
+          calendarQuery.date;
+
+        const events =
+          getDayEvents(
+            target.day,
+            target.month
           );
 
         const official =
@@ -109,150 +130,156 @@ export default {
             target.month
           );
 
-        const allEvents =
-          getDayEvents(
-            target.day,
-            target.month
-          );
-
-        const label =
-          getDateLabel(
-            message
-          );
-
         let reply =
-          `📅 ${label}: ` +
+          `📅 ${calendarQuery.label}: ` +
           `${target.weekday}, ` +
           `${pad(target.day)}/` +
           `${pad(target.month)}/` +
-          `${target.year}\n\n`;
+          `${target.year}`;
 
-        if (official.length > 0) {
-
-          reply +=
-            official
-              .map(
-                event =>
-                  `🇻🇳 Ngày lễ chính thức: ${event.name}`
-              )
-              .join("\n");
-
-        } else {
-
-          reply +=
-            "🇻🇳 Không phải ngày lễ chính thức " +
-            "ở Việt Nam.";
-
-        }
 
         /*
-         * Nếu người dùng hỏi "ngày gì"
-         * hoặc "ngày đặc biệt gì",
-         * cho thêm các ngày kỷ niệm/
-         * ngày phổ biến.
+         * Hỏi giờ
          */
 
         if (
-          message.toLowerCase().includes(
-            "ngày đặc biệt"
-          ) ||
-          message.toLowerCase().includes(
-            "ngày gì"
-          )
+          calendarQuery.askTime &&
+          calendarQuery.isToday
         ) {
 
-          const nonOfficial =
-            allEvents.filter(
-              event =>
-                event.type !== "official"
-            );
+          reply +=
+            `\n🕐 Bây giờ là ` +
+            `${formatVietnamTime(current)}`;
 
-          if (nonOfficial.length > 0) {
+        }
+
+
+        /*
+         * Hỏi ngày lễ
+         */
+
+        if (calendarQuery.askHoliday) {
+
+          reply += "\n\n";
+
+          if (official.length > 0) {
 
             reply +=
-              "\n\n" +
-              formatDayEvents(
-                nonOfficial
-              );
+              official.map(
+                event =>
+                  `🇻🇳 Ngày lễ chính thức: ${event.name}`
+              ).join("\n");
+
+          } else {
+
+            reply +=
+              "🇻🇳 Không phải ngày lễ chính thức " +
+              "ở Việt Nam.";
 
           }
 
         }
 
-        return json({
-          reply,
-          calendar: target,
-          events: allEvents
-        }, cors);
-      }
 
-      /*
-       * =================================
-       * CÂU HỎI NGÀY / GIỜ
-       * =================================
-       */
-
-      const calendarQuestion =
-        isCalendarQuestion(message);
-
-      if (calendarQuestion) {
-
-        const target =
-          getTargetDate(
-            message,
-            current
-          );
-
-        let reply =
-          `📅 ${getDateLabel(message)} ` +
-          `là ${target.weekday}, ` +
-          `ngày ${pad(target.day)}/` +
-          `${pad(target.month)}/` +
-          `${target.year}.`;
+        /*
+         * Hỏi ngày đặc biệt
+         */
 
         if (
-          isTimeQuestion(message) &&
-          isTodayQuestion(message)
+          calendarQuery.askSpecial
         ) {
 
-          reply +=
-            `\n🕐 Bây giờ là ` +
-            `${formatVietnamTime(current)}.`;
+          const special =
+            events.filter(
+              event =>
+                event.type !== "official"
+            );
+
+          reply += "\n\n";
+
+          if (special.length > 0) {
+
+            reply +=
+              formatDayEvents(
+                special
+              );
+
+          } else {
+
+            reply +=
+              "📱 Không có ngày đặc biệt " +
+              "phổ biến trong dữ liệu.";
+
+          }
 
         }
 
+
+        /*
+         * Nếu chỉ hỏi "ngày gì"
+         * thì cho biết tất cả sự kiện.
+         */
+
+        if (
+          calendarQuery.askGeneralDay &&
+          !calendarQuery.askHoliday &&
+          !calendarQuery.askSpecial
+        ) {
+
+          reply += "\n\n";
+
+          if (events.length > 0) {
+
+            reply +=
+              formatDayEvents(events);
+
+          } else {
+
+            reply +=
+              "📌 Không có ngày đặc biệt " +
+              "trong dữ liệu.";
+
+          }
+
+        }
+
+
         return json({
           reply,
-          calendar: target
+
+          calendar: target,
+
+          events
         }, cors);
       }
 
+
       /*
-       * =================================
-       * AI
-       * =================================
+       * ================================
+       * AI BÌNH THƯỜNG
+       * ================================
        */
 
       const systemPrompt = `
 Bạn là HungAI, trợ lý AI riêng của người dùng.
 
-Ngày hiện tại:
-${formatVietnamDate(current)}
+Thời gian hiện tại:
 
-Giờ hiện tại:
+${formatVietnamDate(current)}
 ${formatVietnamTime(current)}
 
 Múi giờ:
-Việt Nam (UTC+7)
+Asia/Ho_Chi_Minh
 
 QUY TẮC:
 
-- Trả lời bằng tiếng Việt nếu người dùng nói tiếng Việt.
+- Trả lời bằng tiếng Việt nếu người dùng dùng tiếng Việt.
+- Tự nhiên và thân thiện.
+- Không bịa thông tin.
 - Không tự đoán ngày tháng.
 - Không tự tính thứ.
-- Không bịa thông tin.
-- Nếu không biết thì nói rõ là không biết.
-- Không gọi ngày Internet là ngày lễ quốc gia.
+- Nếu không biết thì nói rõ.
+- Không gọi ngày phổ biến trên Internet là ngày lễ quốc gia.
 `;
 
       const messages = [
@@ -275,12 +302,18 @@ QUY TẮC:
           }
         );
 
-      let reply = result?.response;
+      let reply =
+        result?.response;
 
-      if (typeof reply !== "string") {
-        reply = JSON.stringify(
-          reply ?? result
-        );
+      if (
+        typeof reply !== "string"
+      ) {
+
+        reply =
+          JSON.stringify(
+            reply ?? result
+          );
+
       }
 
       return json({
@@ -309,159 +342,318 @@ QUY TẮC:
 
 
 /*
- * =================================
- * KIỂM TRA CÂU HỎI NGÀY LỄ
- * =================================
+ * =====================================
+ * PHÂN TÍCH CÂU HỎI LỊCH
+ * =====================================
  */
 
-function isHolidayQuestion(text) {
-
-  const q =
-    text.toLowerCase();
-
-  return (
-    q.includes("ngày lễ") ||
-    q.includes("lễ gì") ||
-    q.includes("có lễ gì") ||
-    q.includes("ngày đặc biệt")
-  );
-}
-
-
-/*
- * =================================
- * KIỂM TRA CÂU HỎI NGÀY
- * =================================
- */
-
-function isCalendarQuestion(text) {
-
-  const q =
-    text.toLowerCase();
-
-  return (
-    q.includes("hôm nay") ||
-    q.includes("hôm qua") ||
-    q.includes("ngày mai") ||
-    q.includes("thứ mấy") ||
-    q.includes("ngày mấy") ||
-    q.includes("ngày bao nhiêu") ||
-    q.includes("ngày tháng năm") ||
-    q.includes("bây giờ") ||
-    q.includes("mấy giờ") ||
-    q.includes("giờ hiện tại")
-  );
-}
-
-
-/*
- * =================================
- * XÁC ĐỊNH NGÀY CẦN HỎI
- * =================================
- */
-
-function getTargetDate(
+function parseCalendarQuery(
   text,
   current
 ) {
 
   const q =
-    text.toLowerCase();
+    text
+      .toLowerCase()
+      .trim();
 
-  if (
+
+  /*
+   * Có phải câu hỏi về lịch không?
+   */
+
+  const hasCalendarWord =
+    q.includes("hôm nay") ||
+    q.includes("hôm qua") ||
+    q.includes("ngày mai") ||
+    q.includes("thứ mấy") ||
+    q.includes("ngày mấy") ||
+    q.includes("ngày gì") ||
+    q.includes("ngày lễ") ||
+    q.includes("lễ gì") ||
+    q.includes("ngày đặc biệt") ||
+    q.includes("mấy giờ") ||
+    q.includes("bây giờ") ||
+    q.includes("giờ hiện tại");
+
+
+  /*
+   * Kiểm tra ngày dạng:
+   *
+   * 8/3
+   * 08/03
+   * 8-3
+   * 08-03
+   */
+
+  const numericDate =
+    q.match(
+      /\b(0?[1-9]|[12][0-9]|3[01])\s*[\/\-]\s*(0?[1-9]|1[0-2])\b/
+    );
+
+
+  let target = null;
+
+  let label = "Hôm nay";
+
+  let isToday = true;
+
+
+  /*
+   * ============================
+   * NGÀY NHẬP TRỰC TIẾP
+   * ============================
+   */
+
+  if (numericDate) {
+
+    const day =
+      Number(numericDate[1]);
+
+    const month =
+      Number(numericDate[2]);
+
+    /*
+     * Nếu người dùng nhập ngày/tháng
+     * mà không nhập năm:
+     * dùng năm hiện tại.
+     */
+
+    let year =
+      current.year;
+
+    /*
+     * Nếu có năm sau ngày đó,
+     * có thể mở rộng sau.
+     */
+
+    target =
+      makeDate(
+        year,
+        month,
+        day
+      );
+
+    if (!target) {
+      return null;
+    }
+
+    label =
+      `${pad(day)}/${pad(month)}`;
+
+    isToday =
+      day === current.day &&
+      month === current.month &&
+      year === current.year;
+
+  }
+
+
+  /*
+   * ============================
+   * HÔM QUA
+   * ============================
+   */
+
+  else if (
     q.includes("hôm qua")
   ) {
 
-    return shiftDate(
-      current,
-      -1
-    );
+    target =
+      shiftDate(
+        current,
+        -1
+      );
+
+    label =
+      "Hôm qua";
+
+    isToday = false;
 
   }
 
-  if (
+
+  /*
+   * ============================
+   * NGÀY MAI
+   * ============================
+   */
+
+  else if (
     q.includes("ngày mai") ||
     q === "mai" ||
     q.includes("mai là")
   ) {
 
-    return shiftDate(
-      current,
-      1
-    );
+    target =
+      shiftDate(
+        current,
+        1
+      );
+
+    label =
+      "Ngày mai";
+
+    isToday = false;
 
   }
 
-  return current;
-}
 
+  /*
+   * ============================
+   * HÔM NAY
+   * ============================
+   */
 
-/*
- * =================================
- * TÊN NGÀY
- * =================================
- */
-
-function getDateLabel(text) {
-
-  const q =
-    text.toLowerCase();
-
-  if (q.includes("hôm qua")) {
-    return "Hôm qua";
-  }
-
-  if (
-    q.includes("ngày mai") ||
-    q === "mai" ||
-    q.includes("mai là")
+  else if (
+    q.includes("hôm nay")
   ) {
-    return "Ngày mai";
+
+    target =
+      current;
+
+    label =
+      "Hôm nay";
+
+    isToday = true;
+
   }
 
-  return "Hôm nay";
-}
+
+  /*
+   * Nếu không nhận ra ngày
+   * nhưng có từ khóa lịch,
+   * mặc định là hôm nay.
+   */
+
+  else if (hasCalendarWord) {
+
+    target =
+      current;
+
+    label =
+      "Hôm nay";
+
+    isToday = true;
+
+  }
 
 
-/*
- * =================================
- * CÓ PHẢI CÂU HỎI GIỜ?
- * =================================
- */
+  else {
 
-function isTimeQuestion(text) {
+    return null;
 
-  const q =
-    text.toLowerCase();
+  }
 
-  return (
+
+  /*
+   * ============================
+   * LOẠI CÂU HỎI
+   * ============================
+   */
+
+  const askHoliday =
+    q.includes("ngày lễ") ||
+    q.includes("lễ gì") ||
+    q.includes("có lễ gì");
+
+
+  const askSpecial =
+    q.includes("ngày đặc biệt");
+
+
+  const askTime =
     q.includes("mấy giờ") ||
     q.includes("bây giờ") ||
-    q.includes("giờ hiện tại") ||
-    q.includes("thời gian hiện tại")
-  );
-}
+    q.includes("giờ hiện tại");
 
 
-function isTodayQuestion(text) {
+  const askGeneralDay =
+    q.includes("ngày gì") ||
+    q.includes("thứ mấy") ||
+    q.includes("ngày mấy") ||
+    q.includes("ngày bao nhiêu");
 
-  const q =
-    text.toLowerCase();
 
-  return (
-    q.includes("hôm nay") ||
-    (
-      !q.includes("hôm qua") &&
-      !q.includes("ngày mai")
-    )
-  );
+  return {
+
+    date: target,
+
+    label,
+
+    isToday,
+
+    askHoliday,
+
+    askSpecial,
+
+    askTime,
+
+    askGeneralDay
+  };
 }
 
 
 /*
- * =================================
+ * =====================================
+ * TẠO NGÀY
+ * =====================================
+ */
+
+function makeDate(
+  year,
+  month,
+  day
+) {
+
+  const date =
+    new Date(
+      Date.UTC(
+        year,
+        month - 1,
+        day
+      )
+    );
+
+
+  /*
+   * Kiểm tra ngày có hợp lệ không.
+   *
+   * Ví dụ:
+   * 31/2 -> null
+   */
+
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+
+    return null;
+
+  }
+
+
+  return {
+
+    year,
+
+    month,
+
+    day,
+
+    weekday:
+      WEEKDAYS[
+        date.getUTCDay()
+      ]
+  };
+}
+
+
+/*
+ * =====================================
  * CỘNG / TRỪ NGÀY
- * =================================
+ * =====================================
  */
 
 function shiftDate(
@@ -478,46 +670,38 @@ function shiftDate(
       )
     );
 
+
   date.setUTCDate(
     date.getUTCDate() + amount
   );
 
-  const year =
-    date.getUTCFullYear();
 
-  const month =
-    date.getUTCMonth() + 1;
-
-  const day =
-    date.getUTCDate();
-
-  const weekdays = [
-    "Chủ Nhật",
-    "Thứ Hai",
-    "Thứ Ba",
-    "Thứ Tư",
-    "Thứ Năm",
-    "Thứ Sáu",
-    "Thứ Bảy"
-  ];
-
-  return {
-    year,
-    month,
-    day,
-    weekday:
-      weekdays[
-        date.getUTCDay()
-      ]
-  };
+  return makeDate(
+    date.getUTCFullYear(),
+    date.getUTCMonth() + 1,
+    date.getUTCDate()
+  );
 }
 
 
+/*
+ * =====================================
+ * FORMAT
+ * =====================================
+ */
+
 function pad(number) {
+
   return String(number)
     .padStart(2, "0");
 }
 
+
+/*
+ * =====================================
+ * JSON
+ * =====================================
+ */
 
 function json(
   data,
@@ -529,9 +713,11 @@ function json(
     JSON.stringify(data),
     {
       status,
+
       headers: {
         "Content-Type":
           "application/json; charset=utf-8",
+
         ...cors
       }
     }
