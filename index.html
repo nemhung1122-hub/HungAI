@@ -10,51 +10,47 @@
       box-sizing: border-box;
     }
 
-    html, body {
-      margin: 0;
-      width: 100%;
-      height: 100%;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #101114;
-      color: #ffffff;
-    }
-
     body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #0b0f14;
+      color: white;
+      height: 100vh;
       display: flex;
       flex-direction: column;
     }
 
-    .header {
+    header {
       height: 60px;
       display: flex;
       align-items: center;
       padding: 0 18px;
-      border-bottom: 1px solid #292b30;
-      background: #15161a;
-      font-size: 21px;
-      font-weight: 700;
+      background: #111720;
+      border-bottom: 1px solid #252d38;
+      font-size: 20px;
+      font-weight: bold;
     }
 
     .status {
       margin-left: 10px;
       font-size: 12px;
-      font-weight: 400;
-      color: #65d68a;
+      color: #4ade80;
+      font-weight: normal;
     }
 
     #chat {
       flex: 1;
       overflow-y: auto;
-      padding: 18px;
+      padding: 20px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 14px;
     }
 
     .message {
       max-width: 85%;
       padding: 12px 15px;
-      border-radius: 16px;
+      border-radius: 15px;
       line-height: 1.5;
       white-space: pre-wrap;
       word-break: break-word;
@@ -67,120 +63,106 @@
 
     .ai {
       align-self: flex-start;
-      background: #24262b;
+      background: #1b2430;
     }
 
-    .welcome {
-      margin: auto;
-      text-align: center;
-      opacity: 0.75;
-      line-height: 1.6;
+    .error {
+      background: #7f1d1d;
     }
 
     .input-area {
       display: flex;
-      gap: 8px;
+      gap: 10px;
       padding: 12px;
-      padding-bottom: calc(12px + env(safe-area-inset-bottom));
-      border-top: 1px solid #292b30;
-      background: #15161a;
+      background: #111720;
+      border-top: 1px solid #252d38;
     }
 
-    #message {
+    textarea {
       flex: 1;
-      min-width: 0;
-      padding: 13px 15px;
-      border: 1px solid #33363d;
-      border-radius: 14px;
-      outline: none;
-      background: #202227;
+      resize: none;
+      min-height: 48px;
+      max-height: 150px;
+      border: 1px solid #303b48;
+      border-radius: 12px;
+      background: #0b0f14;
       color: white;
-      font-size: 16px;
+      padding: 13px;
+      outline: none;
+      font-size: 15px;
     }
 
-    #message:focus {
-      border-color: #2563eb;
-    }
-
-    #send {
-      border: 0;
-      border-radius: 14px;
-      padding: 0 18px;
+    button {
+      width: 80px;
+      border: none;
+      border-radius: 12px;
       background: #2563eb;
       color: white;
       font-size: 15px;
-      font-weight: 600;
+      font-weight: bold;
     }
 
-    #send:disabled {
+    button:disabled {
       opacity: 0.5;
-    }
-
-    .error {
-      background: #4a2020;
     }
   </style>
 </head>
 
 <body>
 
-  <header class="header">
+  <header>
     HungAI
-    <span class="status">Online</span>
+    <span class="status">● Cloudflare AI</span>
   </header>
 
   <main id="chat">
-    <div class="welcome" id="welcome">
-      <strong>Xin chào 👋</strong><br>
-      Tôi là HungAI.<br>
-      Hãy gửi tin nhắn để bắt đầu.
+    <div class="message ai">
+      Xin chào! Tôi là HungAI. Bạn muốn hỏi gì?
     </div>
   </main>
 
   <div class="input-area">
-    <input
+    <textarea
       id="message"
-      type="text"
-      placeholder="Nhắn tin với HungAI..."
-      autocomplete="off"
-    >
+      placeholder="Nhập tin nhắn..."
+      rows="1"
+    ></textarea>
 
     <button id="send">Gửi</button>
   </div>
 
   <script>
-    const API_URL = "https://hungai.nemhung1122.workers.dev/";
+    const API_URL = "https://hungai-api.nemhung1122.workers.dev";
 
     const chat = document.getElementById("chat");
-    const welcome = document.getElementById("welcome");
     const input = document.getElementById("message");
-    const send = document.getElementById("send");
+    const sendButton = document.getElementById("send");
 
     function addMessage(text, type) {
-      if (welcome) {
-        welcome.remove();
-      }
-
       const message = document.createElement("div");
       message.className = "message " + type;
       message.textContent = text;
 
       chat.appendChild(message);
       chat.scrollTop = chat.scrollHeight;
+
+      return message;
     }
 
     async function sendMessage() {
       const message = input.value.trim();
 
-      if (!message || send.disabled) {
+      if (!message || sendButton.disabled) {
         return;
       }
 
       addMessage(message, "user");
 
       input.value = "";
-      send.disabled = true;
-      send.textContent = "...";
+      sendButton.disabled = true;
+      sendButton.textContent = "...";
+
+      const thinking = addMessage("HungAI đang suy nghĩ...", "ai");
 
       try {
         const response = await fetch(API_URL, {
@@ -195,36 +177,36 @@
 
         const data = await response.json();
 
-        if (data.reply) {
-          addMessage(data.reply, "ai");
-        } else if (data.error) {
-          addMessage(
-            "API lỗi: " + JSON.stringify(data.error),
-            "ai error"
-          );
-        } else {
-          addMessage(
-            "HungAI không nhận được câu trả lời.",
-            "ai error"
-          );
+        thinking.remove();
+
+        if (!response.ok) {
+          throw new Error(data.error || "API HungAI trả về lỗi.");
         }
 
-      } catch (error) {
         addMessage(
-          "Không kết nối được tới HungAI API.",
+          data.reply || "HungAI không nhận được câu trả lời.",
+          "ai"
+        );
+
+      } catch (error) {
+        thinking.remove();
+
+        addMessage(
+          "Lỗi kết nối HungAI: " + error.message,
           "ai error"
         );
       }
 
-      send.disabled = false;
-      send.textContent = "Gửi";
+      sendButton.disabled = false;
+      sendButton.textContent = "Gửi";
+
       input.focus();
     }
 
-    send.addEventListener("click", sendMessage);
+    sendButton.addEventListener("click", sendMessage);
 
     input.addEventListener("keydown", function(event) {
-      if (event.key === "Enter") {
+      if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         sendMessage();
       }
