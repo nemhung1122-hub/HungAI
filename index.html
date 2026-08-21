@@ -16,7 +16,9 @@
       height: 100vh;
       background: #0b0f14;
       color: white;
-      font-family: Arial, sans-serif;
+      font-family:
+        Arial,
+        sans-serif;
       display: flex;
       flex-direction: column;
     }
@@ -26,7 +28,8 @@
       align-items: center;
       padding: 0 18px;
       background: #111720;
-      border-bottom: 1px solid #252d38;
+      border-bottom:
+        1px solid #252d38;
       font-size: 20px;
       font-weight: bold;
     }
@@ -46,39 +49,54 @@
     }
     .message {
       max-width: 88%;
-      padding: 12px 15px;
-      border-radius: 16px;
+      padding:
+        12px 15px;
+      border-radius:
+        16px;
       line-height: 1.55;
-      white-space: pre-wrap;
-      word-break: break-word;
+      white-space:
+        pre-wrap;
+      word-break:
+        break-word;
     }
     .user {
-      align-self: flex-end;
-      background: #2563eb;
+      align-self:
+        flex-end;
+      background:
+        #2563eb;
     }
     .ai {
-      align-self: flex-start;
-      background: #1b2430;
+      align-self:
+        flex-start;
+      background:
+        #1b2430;
     }
     .error {
-      align-self: flex-start;
-      background: #7f1d1d;
+      align-self:
+        flex-start;
+      background:
+        #7f1d1d;
     }
     .bottom {
       display: flex;
       gap: 10px;
       padding: 12px;
-      background: #111720;
-      border-top: 1px solid #252d38;
+      background:
+        #111720;
+      border-top:
+        1px solid #252d38;
     }
     textarea {
       flex: 1;
       min-height: 48px;
       max-height: 150px;
       resize: none;
-      border: 1px solid #303b48;
-      border-radius: 14px;
-      background: #0b0f14;
+      border:
+        1px solid #303b48;
+      border-radius:
+        14px;
+      background:
+        #0b0f14;
       color: white;
       padding: 13px;
       font-size: 15px;
@@ -87,8 +105,10 @@
     button {
       width: 80px;
       border: none;
-      border-radius: 14px;
-      background: #2563eb;
+      border-radius:
+        14px;
+      background:
+        #2563eb;
       color: white;
       font-weight: bold;
     }
@@ -97,54 +117,65 @@
     }
     .clear {
       width: auto;
-      padding: 0 12px;
-      background: #252d38;
+      padding:
+        0 12px;
+      background:
+        #252d38;
       font-size: 12px;
     }
   </style>
 </head>
 <body>
-<header>
-  HungAI
-  <span class="status">
-    ● Online
-  </span>
-</header>
-<main id="chat"></main>
-<div class="bottom">
-  <textarea
-    id="input"
-    placeholder="Nhập tin nhắn..."
-  ></textarea>
-  <button
-    id="clear"
-    class="clear"
-  >
-    Xóa
-  </button>
-  <button id="send">
-    Gửi
-  </button>
-</div>
+  <header>
+    HungAI
+    <span class="status">
+      ● Online
+    </span>
+  </header>
+  <main id="chat"></main>
+  <div class="bottom">
+    <textarea
+      id="input"
+      placeholder="Nhập tin nhắn..."
+    ></textarea>
+    <button
+      id="clear"
+      class="clear"
+    >
+      Xóa
+    </button>
+    <button
+      id="send"
+    >
+      Gửi
+    </button>
+  </div>
 <script>
 const API_URL =
   "https://hungai-api.nemhung1122.workers.dev/";
 const STORAGE_KEY =
   "hungai_history";
 const chat =
-  document.getElementById("chat");
+  document.getElementById(
+    "chat"
+  );
 const input =
-  document.getElementById("input");
+  document.getElementById(
+    "input"
+  );
 const send =
-  document.getElementById("send");
+  document.getElementById(
+    "send"
+  );
 const clear =
-  document.getElementById("clear");
-/*
- * ========================================
- * HISTORY
- * ========================================
- */
-let history = loadHistory();
+  document.getElementById(
+    "clear"
+  );
+// =================================
+// HISTORY
+// =================================
+let history =
+  loadHistory();
 function loadHistory() {
   try {
     const raw =
@@ -160,17 +191,22 @@ function loadHistory() {
       return [];
     }
     return data
-      .filter(item =>
-        item &&
-        (
-          item.role === "user" ||
-          item.role === "assistant"
-        ) &&
-        typeof item.content === "string" &&
-        item.content.trim()
+      .filter(
+        item =>
+          item &&
+          (
+            item.role === "user" ||
+            item.role === "assistant"
+          ) &&
+          typeof item.content ===
+            "string"
       )
       .slice(-40);
-  } catch {
+  } catch (error) {
+    console.error(
+      "History error:",
+      error
+    );
     return [];
   }
 }
@@ -182,22 +218,22 @@ function saveHistory() {
     );
   } catch (error) {
     console.error(
-      "HungAI history error:",
+      "Save history error:",
       error
     );
   }
 }
-/*
- * ========================================
- * MESSAGE UI
- * ========================================
- */
+// =================================
+// MESSAGE
+// =================================
 function addMessage(
   text,
   type
 ) {
   const div =
-    document.createElement("div");
+    document.createElement(
+      "div"
+    );
   div.className =
     "message " + type;
   div.textContent =
@@ -207,11 +243,9 @@ function addMessage(
     chat.scrollHeight;
   return div;
 }
-/*
- * ========================================
- * LOAD CHAT
- * ========================================
- */
+// =================================
+// LOAD CHAT
+// =================================
 function loadChat() {
   chat.innerHTML = "";
   if (
@@ -234,14 +268,11 @@ function loadChat() {
     );
   }
 }
-/*
- * ========================================
- * CALL WORKER
- * ========================================
- */
+// =================================
+// CALL WORKER
+// =================================
 async function callHungAI(
-  message,
-  previousHistory
+  message
 ) {
   let response;
   try {
@@ -258,8 +289,7 @@ async function callHungAI(
             JSON.stringify({
               message,
               history:
-                previousHistory
-                  .slice(-12)
+                history.slice(-12)
             })
         }
       );
@@ -269,50 +299,53 @@ async function callHungAI(
       error
     );
     throw new Error(
-      "Không kết nối được tới Worker. Hãy kiểm tra mạng hoặc URL Worker."
+      "FETCH_ERROR: " +
+      (
+        error?.message ||
+        "Không thể kết nối Worker."
+      )
     );
   }
-  const text =
+  const raw =
     await response.text();
+  console.log(
+    "HungAI HTTP:",
+    response.status
+  );
+  console.log(
+    "HungAI RAW:",
+    raw
+  );
   let data;
   try {
     data =
-      JSON.parse(text);
+      JSON.parse(raw);
   } catch {
-    console.error(
-      "INVALID JSON:",
-      text
-    );
     throw new Error(
-      `Worker trả dữ liệu không hợp lệ. HTTP ${response.status}`
+      "Worker trả về dữ liệu không phải JSON. HTTP " +
+      response.status
     );
   }
   if (!response.ok) {
     throw new Error(
       data?.error ||
-      `Worker lỗi HTTP ${response.status}`
+      `Worker HTTP ${response.status}`
     );
   }
   if (
-    typeof data?.reply !== "string" ||
-    !data.reply.trim()
+    typeof data?.reply !==
+      "string"
   ) {
-    console.error(
-      "BAD RESPONSE:",
-      data
-    );
     throw new Error(
       data?.error ||
-      "Worker không trả về câu trả lời."
+      "Worker không trả về reply."
     );
   }
   return data.reply;
 }
-/*
- * ========================================
- * SEND
- * ========================================
- */
+// =================================
+// SEND
+// =================================
 async function sendMessage() {
   const message =
     input.value.trim();
@@ -322,9 +355,6 @@ async function sendMessage() {
   ) {
     return;
   }
-  /*
-   * Hiển thị user.
-   */
   addMessage(
     message,
     "user"
@@ -336,30 +366,19 @@ async function sendMessage() {
       "HungAI đang suy nghĩ...",
       "ai"
     );
-  /*
-   * Quan trọng:
-   *
-   * Gửi history CŨ.
-   *
-   * Sau khi AI trả lời thành công
-   * mới thêm message mới vào history.
-   */
-  const historyForRequest =
-    history.slice(-12);
   try {
     const reply =
       await callHungAI(
-        message,
-        historyForRequest
+        message
       );
     thinking.remove();
     addMessage(
       reply,
       "ai"
     );
-    /*
-     * Lưu cả câu hỏi và câu trả lời.
-     */
+    // =============================
+    // SAVE HISTORY
+    // =============================
     history.push({
       role: "user",
       content: message
@@ -368,9 +387,6 @@ async function sendMessage() {
       role: "assistant",
       content: reply
     });
-    /*
-     * Tối đa 40 message.
-     */
     if (
       history.length > 40
     ) {
@@ -393,42 +409,35 @@ async function sendMessage() {
       "error"
     );
   } finally {
-    send.disabled = false;
+    send.disabled =
+      false;
     input.focus();
   }
 }
-/*
- * ========================================
- * CLEAR
- * ========================================
- */
+// =================================
+// CLEAR
+// =================================
 clear.addEventListener(
   "click",
   () => {
     history = [];
-    try {
-      localStorage.removeItem(
-        STORAGE_KEY
-      );
-    } catch {}
+    localStorage.removeItem(
+      STORAGE_KEY
+    );
     loadChat();
     input.focus();
   }
 );
-/*
- * ========================================
- * BUTTON
- * ========================================
- */
+// =================================
+// SEND BUTTON
+// =================================
 send.addEventListener(
   "click",
   sendMessage
 );
-/*
- * ========================================
- * ENTER
- * ========================================
- */
+// =================================
+// ENTER
+// =================================
 input.addEventListener(
   "keydown",
   event => {
@@ -441,11 +450,9 @@ input.addEventListener(
     }
   }
 );
-/*
- * ========================================
- * START
- * ========================================
- */
+// =================================
+// START
+// =================================
 loadChat();
 input.focus();
 </script>
