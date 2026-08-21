@@ -19,7 +19,11 @@ export default {
     }
 
     if (request.method !== "POST") {
-      return json({ error: "POST only" }, cors, 405);
+      return json(
+        { error: "POST only" },
+        cors,
+        405
+      );
     }
 
     try {
@@ -34,31 +38,60 @@ export default {
         Array.isArray(body?.history)
           ? body.history
               .filter(
-                x =>
-                  x &&
-                  (x.role === "user" ||
-                    x.role === "assistant") &&
-                  typeof x.content === "string"
+                item =>
+                  item &&
+                  (item.role === "user" ||
+                    item.role === "assistant") &&
+                  typeof item.content === "string"
               )
               .slice(-20)
           : [];
 
       if (!message) {
-        return json({
-          error: "Tin nhắn trống."
-        }, cors, 400);
+        return json(
+          { error: "Tin nhắn trống." },
+          cors,
+          400
+        );
       }
 
       /*
-       * Xác định những câu hỏi có khả năng cần
-       * thông tin mới từ Internet.
+       * Lấy thời gian thực tế của request.
+       * Nếu Cloudflare xác định được timezone
+       * của người dùng thì dùng timezone đó.
+       * Nếu không, mặc định Việt Nam.
        */
-      const needsWeb = shouldSearchWeb(message);
 
-      let webContext = "";
+      const timezone =
+        request.cf?.timezone ||
+        "Asia/Ho_Chi_Minh";
 
-      if (needsWeb) {
-        webContext = await webSearch(message);
+      const now =
+        new Date();
+
+      const dateInfo =
+        getDateTimeInfo(
+          now,
+          timezone
+        );
+
+      /*
+       * Nếu người dùng hỏi ngày/giờ,
+       * trả lời trực tiếp từ đồng hồ hệ thống.
+       * Không cho model đoán.
+       */
+
+      if (isDateTimeQuestion(message)) {
+
+        return json({
+          reply:
+            `Hôm nay là ${dateInfo.day} ` +
+            `tháng ${dateInfo.month} ` +
+            `năm ${dateInfo.year}. ` +
+            `Bây giờ là ${dateInfo.hour}:${dateInfo.minute}.`,
+          currentTime: dateInfo
+        }, cors);
+
       }
 
       const systemPrompt = `
@@ -67,21 +100,24 @@ Bạn là HungAI, trợ lý AI riêng của người dùng.
 Tính cách:
 - Thân thiện.
 - Tự nhiên.
-- Thông minh.
-- Trả lời bằng tiếng Việt nếu người dùng nói tiếng Việt.
-- Trả lời trực tiếp, không vòng vo.
+- Rõ ràng.
+- Hữu ích.
+- Trả lời bằng tiếng Việt khi người dùng nói tiếng Việt.
+
+THỜI GIAN HIỆN TẠI:
+- Ngày: ${dateInfo.day}/${dateInfo.month}/${dateInfo.year}
+- Giờ: ${dateInfo.hour}:${dateInfo.minute}
+- Múi giờ: ${timezone}
 
 QUY TẮC:
 1. Dùng lịch sử hội thoại để hiểu ngữ cảnh.
-2. Không được bịa thông tin.
-3. Nếu có dữ liệu tìm kiếm Internet được cung cấp bên dưới,
-   hãy ưu tiên sử dụng dữ liệu đó cho thông tin mới.
-4. Nếu dữ liệu Internet không đủ hoặc không tìm được,
-   hãy nói rõ rằng chưa xác minh được thay vì bịa.
-5. Không nói rằng bạn đã tìm Internet nếu không có dữ liệu tìm kiếm.
-
-DỮ LIỆU INTERNET:
-${webContext || "Không có dữ liệu Internet cho câu hỏi này."}
+2. Không bịa thông tin.
+3. Không tự đoán ngày tháng.
+4. Khi người dùng hỏi về ngày hoặc giờ hiện tại,
+   hãy dùng thông tin thời gian được cung cấp ở trên.
+5. Với thông tin cần dữ liệu trực tiếp như thời tiết,
+   tin tức hoặc giá hiện tại, không được giả vờ rằng
+   bạn đã kiểm tra dữ liệu nếu chưa có nguồn dữ liệu.
 `;
 
       const messages = [
@@ -89,35 +125,46 @@ ${webContext || "Không có dữ liệu Internet cho câu hỏi này."}
           role: "system",
           content: systemPrompt
         },
+
         ...history,
+
         {
           role: "user",
           content: message
         }
       ];
 
-      const result = await env.AI.run(
-        "@cf/zai-org/glm-4.7-flash",
-        {
-          messages
-        }
-      );
-
-      let reply = result?.response;
-
-      if (typeof reply !== "string") {
-        reply = JSON.stringify(
-          reply ?? result
+      const result =
+        await env.AI.run(
+          "@cf/zai-org/glm-4.7-flash",
+          {
+            messages
+          }
         );
+
+      let reply =
+        result?.response;
+
+      if (
+        typeof reply !== "string"
+      ) {
+        reply =
+          JSON.stringify(
+            reply ?? result
+          );
       }
 
       return json({
         reply,
-        webUsed: needsWeb && Boolean(webContext)
+        currentTime: dateInfo
       }, cors);
 
     } catch (error) {
-      console.error("HungAI error:", error);
+
+      console.error(
+        "HungAI error:",
+        error
+      );
 
       return json({
         error:
@@ -130,184 +177,92 @@ ${webContext || "Không có dữ liệu Internet cho câu hỏi này."}
 
 
 /*
- * Quyết định câu hỏi có khả năng cần
- * thông tin mới hay không.
+ * Nhận biết câu hỏi về ngày/giờ.
  */
-function shouldSearchWeb(text) {
-  const q = text.toLowerCase();
+
+function isDateTimeQuestion(text) {
+
+  const q =
+    text.toLowerCase();
 
   const keywords = [
-    "hôm nay",
-    "bây giờ",
-    "hiện tại",
-    "mới nhất",
-    "mới đây",
-    "tin mới",
-    "tin tức",
-    "thời tiết",
-    "nhiệt độ",
-    "giá",
-    "tỷ giá",
-    "bitcoin",
-    "btc",
-    "cổ phiếu",
-    "kết quả",
-    "trận đấu",
-    "lịch thi đấu",
-    "ai mới",
-    "iphone mới",
-    "sản phẩm mới",
-    "đang diễn ra",
-    "vừa xảy ra",
-    "năm nay",
-    "2026"
+    "hôm nay ngày mấy",
+    "hôm nay là ngày mấy",
+    "hôm nay ngày bao nhiêu",
+    "ngày hôm nay",
+    "hôm nay thứ mấy",
+    "bây giờ mấy giờ",
+    "bây giờ là mấy giờ",
+    "mấy giờ rồi",
+    "giờ hiện tại",
+    "thời gian hiện tại",
+    "ngày tháng năm"
   ];
 
   return keywords.some(
-    keyword => q.includes(keyword)
+    keyword =>
+      q.includes(keyword)
   );
 }
 
 
 /*
- * Tìm kiếm web không cần API key.
- *
- * Đây là lớp thử nghiệm đầu tiên:
- * nếu nguồn tìm kiếm không phản hồi,
- * HungAI vẫn hoạt động bình thường.
+ * Chuyển thời gian thành dữ liệu
+ * dễ đưa cho model sử dụng.
  */
-async function webSearch(query) {
-  try {
-    const url =
-      "https://html.duckduckgo.com/html/?q=" +
-      encodeURIComponent(query);
 
-    const response =
-      await fetch(url, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (compatible; HungAI/1.0)"
-        }
-      });
+function getDateTimeInfo(
+  date,
+  timezone
+) {
 
-    if (!response.ok) {
-      return "";
-    }
+  const parts =
+    new Intl.DateTimeFormat(
+      "vi-VN",
+      {
+        timeZone: timezone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false
+      }
+    ).formatToParts(date);
 
-    const html =
-      await response.text();
+  const get =
+    type =>
+      parts.find(
+        item =>
+          item.type === type
+      )?.value;
 
-    const results =
-      parseDuckDuckGo(html);
-
-    if (!results.length) {
-      return "";
-    }
-
-    return results
-      .slice(0, 5)
-      .map(
-        (item, index) =>
-          `[${index + 1}] ${item.title}\n` +
-          `${item.snippet}\n` +
-          `Nguồn: ${item.url}`
-      )
-      .join("\n\n");
-
-  } catch (error) {
-    console.error(
-      "Web search error:",
-      error
-    );
-
-    return "";
-  }
+  return {
+    day: get("day"),
+    month: get("month"),
+    year: get("year"),
+    hour: get("hour"),
+    minute: get("minute"),
+    timezone
+  };
 }
 
 
-/*
- * Lấy tiêu đề, URL và đoạn mô tả
- * từ kết quả DuckDuckGo HTML.
- */
-function parseDuckDuckGo(html) {
-  const results = [];
+function json(
+  data,
+  cors,
+  status = 200
+) {
 
-  const blocks =
-    html.split(
-      'class="result results_links'
-    );
-
-  for (const block of blocks.slice(1)) {
-    const linkMatch =
-      block.match(
-        /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/
-      );
-
-    if (!linkMatch) {
-      continue;
-    }
-
-    const url =
-      decodeHtml(linkMatch[1]);
-
-    const title =
-      cleanHtml(linkMatch[2]);
-
-    const snippetMatch =
-      block.match(
-        /class="result__snippet"[^>]*>([\s\S]*?)<\/a>/
-      ) ||
-      block.match(
-        /class="result__snippet"[^>]*>([\s\S]*?)<\/div>/
-      );
-
-    const snippet =
-      snippetMatch
-        ? cleanHtml(snippetMatch[1])
-        : "";
-
-    if (title && url) {
-      results.push({
-        title,
-        url,
-        snippet
-      });
-    }
-  }
-
-  return results;
-}
-
-
-function cleanHtml(value) {
-  return decodeHtml(
-    value
-      .replace(/<[^>]*>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-  );
-}
-
-
-function decodeHtml(value) {
-  return value
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#x27;/g, "'")
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
-}
-
-
-function json(data, cors, status = 200) {
   return new Response(
     JSON.stringify(data),
     {
       status,
+
       headers: {
         "Content-Type":
           "application/json; charset=utf-8",
+
         ...cors
       }
     }
