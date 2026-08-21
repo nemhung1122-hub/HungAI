@@ -1,3 +1,9 @@
+import {
+  getVietnamDate,
+  formatVietnamDate,
+  formatVietnamTime
+} from "./calendar.js";
+
 export default {
   async fetch(request, env) {
     const cors = {
@@ -7,7 +13,9 @@ export default {
     };
 
     if (request.method === "OPTIONS") {
-      return new Response(null, { headers: cors });
+      return new Response(null, {
+        headers: cors
+      });
     }
 
     if (request.method === "GET") {
@@ -27,7 +35,8 @@ export default {
     }
 
     try {
-      const body = await request.json();
+      const body =
+        await request.json();
 
       const message =
         typeof body?.message === "string"
@@ -40,8 +49,10 @@ export default {
               .filter(
                 item =>
                   item &&
-                  (item.role === "user" ||
-                    item.role === "assistant") &&
+                  (
+                    item.role === "user" ||
+                    item.role === "assistant"
+                  ) &&
                   typeof item.content === "string"
               )
               .slice(-20)
@@ -49,67 +60,58 @@ export default {
 
       if (!message) {
         return json(
-          { error: "Tin nhắn trống." },
+          {
+            error:
+              "Tin nhắn trống."
+          },
           cors,
           400
         );
       }
 
-      const timezone =
-        request.cf?.timezone ||
-        "Asia/Ho_Chi_Minh";
-
-      const now =
-        new Date();
-
-      const dateInfo =
-        getDateTimeInfo(
-          now,
-          timezone
-        );
+      /*
+       * Lấy thời gian thật của Việt Nam.
+       */
+      const current =
+        getVietnamDate();
 
       /*
-       * Các câu hỏi về ngày/giờ được xử lý
-       * hoàn toàn bằng code.
+       * Các câu hỏi về ngày giờ
+       * được xử lý trực tiếp bằng code.
        */
-
-      if (isDateTimeQuestion(message)) {
+      if (
+        isCalendarQuestion(message)
+      ) {
 
         return json({
           reply:
-            `Hôm nay là ${dateInfo.weekday}, ` +
-            `ngày ${dateInfo.day} tháng ` +
-            `${dateInfo.month} năm ${dateInfo.year}. ` +
-            `Bây giờ là ${dateInfo.hour}:${dateInfo.minute}.`,
-          currentTime: dateInfo
+            `📅 ${formatVietnamDate(current)}\n` +
+            `🕐 ${formatVietnamTime(current)}\n` +
+            `🌏 Múi giờ: Việt Nam (UTC+7)`,
+          calendar: current
         }, cors);
-
       }
 
+      /*
+       * Với câu hỏi bình thường,
+       * đưa thời gian thật vào context
+       * để AI biết ngày hiện tại.
+       */
       const systemPrompt = `
 Bạn là HungAI, trợ lý AI riêng của người dùng.
 
-Tính cách:
-- Thân thiện.
-- Tự nhiên.
-- Rõ ràng.
-- Hữu ích.
-- Trả lời bằng tiếng Việt khi người dùng nói tiếng Việt.
+Hãy trả lời tự nhiên, thân thiện và chính xác.
 
-THỜI GIAN HỆ THỐNG:
-Ngày: ${dateInfo.day}/${dateInfo.month}/${dateInfo.year}
-Thứ: ${dateInfo.weekday}
-Giờ: ${dateInfo.hour}:${dateInfo.minute}
-Múi giờ: ${timezone}
+THỜI GIAN THỰC TẾ:
+${formatVietnamDate(current)}
+${formatVietnamTime(current)}
+Múi giờ: Việt Nam (UTC+7)
 
 QUY TẮC:
-1. Dùng lịch sử hội thoại để hiểu ngữ cảnh.
-2. Không bịa thông tin.
-3. Không tự đoán ngày hoặc thứ.
-4. Nếu người dùng hỏi ngày/giờ hiện tại,
-   hãy sử dụng dữ liệu hệ thống được cung cấp.
-5. Nếu không có dữ liệu thời gian thực cho một vấn đề,
-   không được giả vờ rằng bạn đã kiểm tra nó.
+- Không tự đoán ngày hoặc thứ.
+- Không tự bịa thông tin.
+- Dùng lịch sử hội thoại để hiểu ngữ cảnh.
+- Nếu không biết thì nói không biết.
 `;
 
       const messages = [
@@ -117,7 +119,9 @@ QUY TẮC:
           role: "system",
           content: systemPrompt
         },
+
         ...history,
+
         {
           role: "user",
           content: message
@@ -135,7 +139,9 @@ QUY TẮC:
       let reply =
         result?.response;
 
-      if (typeof reply !== "string") {
+      if (
+        typeof reply !== "string"
+      ) {
         reply =
           JSON.stringify(
             reply ?? result
@@ -143,8 +149,7 @@ QUY TẮC:
       }
 
       return json({
-        reply,
-        currentTime: dateInfo
+        reply
       }, cors);
 
     } catch (error) {
@@ -164,84 +169,30 @@ QUY TẮC:
 };
 
 
-function isDateTimeQuestion(text) {
+function isCalendarQuestion(text) {
 
   const q =
     text.toLowerCase();
 
   const keywords = [
-    "hôm nay ngày mấy",
-    "hôm nay là ngày mấy",
-    "hôm nay ngày bao nhiêu",
-    "ngày hôm nay",
-    "hôm nay thứ mấy",
-    "hôm nay là thứ mấy",
-    "bây giờ mấy giờ",
-    "bây giờ là mấy giờ",
-    "mấy giờ rồi",
+    "hôm nay",
+    "hôm qua",
+    "ngày mai",
+    "mai là ngày",
+    "mấy giờ",
+    "bây giờ",
     "giờ hiện tại",
     "thời gian hiện tại",
-    "ngày tháng năm",
-    "hôm nay là ngày gì",
-    "hôm nay ngày gì"
+    "thứ mấy",
+    "ngày mấy",
+    "ngày bao nhiêu",
+    "ngày tháng năm"
   ];
 
   return keywords.some(
     keyword =>
       q.includes(keyword)
   );
-}
-
-
-function getDateTimeInfo(
-  date,
-  timezone
-) {
-
-  const parts =
-    new Intl.DateTimeFormat(
-      "vi-VN",
-      {
-        timeZone: timezone,
-        weekday: "long",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false
-      }
-    ).formatToParts(date);
-
-  const get =
-    type =>
-      parts.find(
-        item =>
-          item.type === type
-      )?.value;
-
-  let weekday =
-    get("weekday");
-
-  /*
-   * Intl tiếng Việt đôi khi trả:
-   * "Thứ Sáu", "thứ sáu"...
-   * Chuẩn hóa để hiển thị đẹp.
-   */
-
-  weekday =
-    weekday.charAt(0).toUpperCase() +
-    weekday.slice(1);
-
-  return {
-    day: get("day"),
-    month: get("month"),
-    year: get("year"),
-    weekday,
-    hour: get("hour"),
-    minute: get("minute"),
-    timezone
-  };
 }
 
 
