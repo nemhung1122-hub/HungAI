@@ -1,28 +1,25 @@
 export default {
   async fetch(request, env) {
-    const corsHeaders = {
+    const cors = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type"
     };
 
     if (request.method === "OPTIONS") {
-      return new Response(null, {
-        headers: corsHeaders
-      });
+      return new Response(null, { headers: cors });
     }
 
     if (request.method === "GET") {
       return new Response(
         JSON.stringify({
           status: "online",
-          message: "HungAI đang hoạt động.",
           model: "@cf/zai-org/glm-4.7-flash"
         }),
         {
           headers: {
             "Content-Type": "application/json",
-            ...corsHeaders
+            ...cors
           }
         }
       );
@@ -30,14 +27,12 @@ export default {
 
     if (request.method !== "POST") {
       return new Response(
-        JSON.stringify({
-          error: "Chỉ hỗ trợ POST."
-        }),
+        JSON.stringify({ error: "POST only" }),
         {
           status: 405,
           headers: {
             "Content-Type": "application/json",
-            ...corsHeaders
+            ...cors
           }
         }
       );
@@ -45,18 +40,16 @@ export default {
 
     try {
       const body = await request.json();
-      const message = body?.message;
+      const message = String(body?.message || "").trim();
 
-      if (!message || typeof message !== "string") {
+      if (!message) {
         return new Response(
-          JSON.stringify({
-            error: "Thiếu message."
-          }),
+          JSON.stringify({ error: "Tin nhắn trống." }),
           {
             status: 400,
             headers: {
               "Content-Type": "application/json",
-              ...corsHeaders
+              ...cors
             }
           }
         );
@@ -69,7 +62,7 @@ export default {
             {
               role: "system",
               content:
-                "Bạn là HungAI, một trợ lý AI riêng của người dùng. Hãy trả lời tự nhiên, hữu ích và bằng tiếng Việt."
+                "Bạn là HungAI, trợ lý AI riêng của người dùng. Trả lời tự nhiên, rõ ràng và bằng tiếng Việt."
             },
             {
               role: "user",
@@ -79,32 +72,37 @@ export default {
         }
       );
 
-      // Trả nguyên kết quả của Workers AI để frontend xử lý đúng cấu trúc.
+      // Cloudflare trả response.response cho Workers AI model này.
+      const reply =
+        typeof result?.response === "string"
+          ? result.response
+          : JSON.stringify(result?.response ?? result);
+
       return new Response(
         JSON.stringify({
-          success: true,
-          result: result
+          reply
         }),
         {
           status: 200,
           headers: {
             "Content-Type": "application/json",
-            ...corsHeaders
+            ...cors
           }
         }
       );
 
     } catch (error) {
+      console.error("HungAI error:", error);
+
       return new Response(
         JSON.stringify({
-          success: false,
-          error: error?.message || String(error)
+          error: error?.message || "Workers AI error"
         }),
         {
           status: 500,
           headers: {
             "Content-Type": "application/json",
-            ...corsHeaders
+            ...cors
           }
         }
       );
