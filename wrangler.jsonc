@@ -1,12 +1,24 @@
-name = "hungai-api"
-main = "worker.js"
-compatibility_date = "2026-08-22"
-[ai]
-binding = "AI"
-[durable_objects]
-bindings = [
-  { name = "HUNGAI_MEMORY", class_name = "HungAIMemory" }
-]
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["HungAIMemory"]
+{
+  "name": "hungai-api",
+  "main": "worker.js",
+  "compatibility_date": "2026-08-22",
+  "ai": {
+    "binding": "AI"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "HUNGAI_MEMORY",
+        "class_name": "HungAIMemory"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "HungAIMemory"
+      ]
+    }
+  ]
+}
