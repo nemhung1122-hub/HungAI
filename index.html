@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
   <title>HungAI</title>
 
   <style>
@@ -102,12 +101,10 @@
       color: white;
       font-size: 15px;
       font-weight: bold;
-      cursor: pointer;
     }
 
     button:disabled {
       opacity: 0.5;
-      cursor: default;
     }
   </style>
 </head>
@@ -120,31 +117,24 @@
 </header>
 
 <main id="chat">
-
   <div class="message ai">
     Xin chào! Mình là HungAI. 👋
   </div>
-
 </main>
 
 <div class="bottom">
-
   <textarea
     id="input"
     placeholder="Nhập tin nhắn..."
   ></textarea>
 
-  <button id="send">
-    Gửi
-  </button>
-
+  <button id="send">Gửi</button>
 </div>
 
 <script>
 
   const API_URL =
     "https://hungai-api.nemhung1122.workers.dev";
-
 
   const chat =
     document.getElementById("chat");
@@ -154,6 +144,15 @@
 
   const send =
     document.getElementById("send");
+
+
+  /*
+   * Lịch sử cuộc trò chuyện hiện tại.
+   *
+   * Không lưu API key hay dữ liệu bí mật.
+   */
+
+  let history = [];
 
 
   function addMessage(text, type) {
@@ -196,6 +195,7 @@
 
     send.disabled = true;
 
+
     const thinking =
       addMessage(
         "HungAI đang suy nghĩ...",
@@ -217,7 +217,11 @@
             },
 
             body: JSON.stringify({
-              message: message
+
+              message: message,
+
+              history: history
+
             })
           }
         );
@@ -240,23 +244,6 @@
       }
 
 
-      /*
-       * Worker trả:
-       *
-       * {
-       *   "reply": "..."
-       * }
-       *
-       * Nhưng trong trường hợp reply
-       * vẫn chứa JSON của model, chúng ta
-       * sẽ lấy:
-       *
-       * choices[0].message.content
-       *
-       * và chỉ hiển thị phần content.
-       */
-
-
       if (!data.reply) {
 
         throw new Error(
@@ -270,22 +257,25 @@
         data.reply;
 
 
+      /*
+       * Nếu Worker trả về JSON
+       * của model thì lấy riêng
+       * message.content.
+       */
+
       if (
         typeof reply === "string"
       ) {
 
         try {
 
-          const modelData =
+          const parsed =
             JSON.parse(reply);
 
-
           const content =
-            modelData
+            parsed
               ?.choices?.[0]
-              ?.message
-              ?.content;
-
+              ?.message?.content;
 
           if (
             typeof content === "string" &&
@@ -298,22 +288,11 @@
           }
 
         } catch (error) {
-
-          /*
-           * Nếu reply đã là
-           * văn bản bình thường
-           * thì giữ nguyên.
-           */
-
+          // Reply đã là text bình thường.
         }
 
       }
 
-
-      /*
-       * Trường hợp Worker sau này
-       * trả thẳng object thay vì string.
-       */
 
       if (
         typeof reply === "object"
@@ -322,8 +301,7 @@
         reply =
           reply
             ?.choices?.[0]
-            ?.message
-            ?.content ||
+            ?.message?.content ||
           "HungAI không có câu trả lời.";
 
       }
@@ -335,10 +313,36 @@
       );
 
 
+      /*
+       * Lưu cả câu hỏi và câu trả lời
+       * để câu hỏi tiếp theo có ngữ cảnh.
+       */
+
+      history.push({
+        role: "user",
+        content: message
+      });
+
+      history.push({
+        role: "assistant",
+        content: reply
+      });
+
+
+      /*
+       * Chỉ giữ 20 tin nhắn gần nhất
+       * để tránh gửi quá nhiều dữ liệu.
+       */
+
+      if (history.length > 20) {
+        history =
+          history.slice(-20);
+      }
+
+
     } catch (error) {
 
       thinking.remove();
-
 
       addMessage(
         "Lỗi: " +
