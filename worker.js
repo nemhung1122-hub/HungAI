@@ -55,13 +55,6 @@ export default {
         );
       }
 
-      /*
-       * Lấy thời gian thực tế của request.
-       * Nếu Cloudflare xác định được timezone
-       * của người dùng thì dùng timezone đó.
-       * Nếu không, mặc định Việt Nam.
-       */
-
       const timezone =
         request.cf?.timezone ||
         "Asia/Ho_Chi_Minh";
@@ -76,18 +69,17 @@ export default {
         );
 
       /*
-       * Nếu người dùng hỏi ngày/giờ,
-       * trả lời trực tiếp từ đồng hồ hệ thống.
-       * Không cho model đoán.
+       * Các câu hỏi về ngày/giờ được xử lý
+       * hoàn toàn bằng code.
        */
 
       if (isDateTimeQuestion(message)) {
 
         return json({
           reply:
-            `Hôm nay là ${dateInfo.day} ` +
-            `tháng ${dateInfo.month} ` +
-            `năm ${dateInfo.year}. ` +
+            `Hôm nay là ${dateInfo.weekday}, ` +
+            `ngày ${dateInfo.day} tháng ` +
+            `${dateInfo.month} năm ${dateInfo.year}. ` +
             `Bây giờ là ${dateInfo.hour}:${dateInfo.minute}.`,
           currentTime: dateInfo
         }, cors);
@@ -104,20 +96,20 @@ Tính cách:
 - Hữu ích.
 - Trả lời bằng tiếng Việt khi người dùng nói tiếng Việt.
 
-THỜI GIAN HIỆN TẠI:
-- Ngày: ${dateInfo.day}/${dateInfo.month}/${dateInfo.year}
-- Giờ: ${dateInfo.hour}:${dateInfo.minute}
-- Múi giờ: ${timezone}
+THỜI GIAN HỆ THỐNG:
+Ngày: ${dateInfo.day}/${dateInfo.month}/${dateInfo.year}
+Thứ: ${dateInfo.weekday}
+Giờ: ${dateInfo.hour}:${dateInfo.minute}
+Múi giờ: ${timezone}
 
 QUY TẮC:
 1. Dùng lịch sử hội thoại để hiểu ngữ cảnh.
 2. Không bịa thông tin.
-3. Không tự đoán ngày tháng.
-4. Khi người dùng hỏi về ngày hoặc giờ hiện tại,
-   hãy dùng thông tin thời gian được cung cấp ở trên.
-5. Với thông tin cần dữ liệu trực tiếp như thời tiết,
-   tin tức hoặc giá hiện tại, không được giả vờ rằng
-   bạn đã kiểm tra dữ liệu nếu chưa có nguồn dữ liệu.
+3. Không tự đoán ngày hoặc thứ.
+4. Nếu người dùng hỏi ngày/giờ hiện tại,
+   hãy sử dụng dữ liệu hệ thống được cung cấp.
+5. Nếu không có dữ liệu thời gian thực cho một vấn đề,
+   không được giả vờ rằng bạn đã kiểm tra nó.
 `;
 
       const messages = [
@@ -125,9 +117,7 @@ QUY TẮC:
           role: "system",
           content: systemPrompt
         },
-
         ...history,
-
         {
           role: "user",
           content: message
@@ -145,9 +135,7 @@ QUY TẮC:
       let reply =
         result?.response;
 
-      if (
-        typeof reply !== "string"
-      ) {
+      if (typeof reply !== "string") {
         reply =
           JSON.stringify(
             reply ?? result
@@ -176,10 +164,6 @@ QUY TẮC:
 };
 
 
-/*
- * Nhận biết câu hỏi về ngày/giờ.
- */
-
 function isDateTimeQuestion(text) {
 
   const q =
@@ -191,12 +175,15 @@ function isDateTimeQuestion(text) {
     "hôm nay ngày bao nhiêu",
     "ngày hôm nay",
     "hôm nay thứ mấy",
+    "hôm nay là thứ mấy",
     "bây giờ mấy giờ",
     "bây giờ là mấy giờ",
     "mấy giờ rồi",
     "giờ hiện tại",
     "thời gian hiện tại",
-    "ngày tháng năm"
+    "ngày tháng năm",
+    "hôm nay là ngày gì",
+    "hôm nay ngày gì"
   ];
 
   return keywords.some(
@@ -205,11 +192,6 @@ function isDateTimeQuestion(text) {
   );
 }
 
-
-/*
- * Chuyển thời gian thành dữ liệu
- * dễ đưa cho model sử dụng.
- */
 
 function getDateTimeInfo(
   date,
@@ -221,6 +203,7 @@ function getDateTimeInfo(
       "vi-VN",
       {
         timeZone: timezone,
+        weekday: "long",
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
@@ -237,10 +220,24 @@ function getDateTimeInfo(
           item.type === type
       )?.value;
 
+  let weekday =
+    get("weekday");
+
+  /*
+   * Intl tiếng Việt đôi khi trả:
+   * "Thứ Sáu", "thứ sáu"...
+   * Chuẩn hóa để hiển thị đẹp.
+   */
+
+  weekday =
+    weekday.charAt(0).toUpperCase() +
+    weekday.slice(1);
+
   return {
     day: get("day"),
     month: get("month"),
     year: get("year"),
+    weekday,
     hour: get("hour"),
     minute: get("minute"),
     timezone
@@ -258,11 +255,9 @@ function json(
     JSON.stringify(data),
     {
       status,
-
       headers: {
         "Content-Type":
           "application/json; charset=utf-8",
-
         ...cors
       }
     }
