@@ -40,11 +40,39 @@ export default {
 
     try {
       const body = await request.json();
-      const message = String(body?.message || "").trim();
+
+      const message =
+        typeof body?.message === "string"
+          ? body.message.trim()
+          : "";
+
+      /*
+       * Frontend gửi lịch sử hội thoại:
+       *
+       * history: [
+       *   { role: "user", content: "..." },
+       *   { role: "assistant", content: "..." }
+       * ]
+       */
+
+      const history =
+        Array.isArray(body?.history)
+          ? body.history
+              .filter(
+                item =>
+                  item &&
+                  (item.role === "user" ||
+                   item.role === "assistant") &&
+                  typeof item.content === "string"
+              )
+              .slice(-20)
+          : [];
 
       if (!message) {
         return new Response(
-          JSON.stringify({ error: "Tin nhắn trống." }),
+          JSON.stringify({
+            error: "Tin nhắn trống."
+          }),
           {
             status: 400,
             headers: {
@@ -55,24 +83,30 @@ export default {
         );
       }
 
+      const messages = [
+        {
+          role: "system",
+          content:
+            "Bạn là HungAI, một trợ lý AI riêng của người dùng. " +
+            "Hãy trả lời tự nhiên, rõ ràng, hữu ích và bằng tiếng Việt. " +
+            "Hãy sử dụng lịch sử cuộc trò chuyện để hiểu ngữ cảnh."
+        },
+
+        ...history,
+
+        {
+          role: "user",
+          content: message
+        }
+      ];
+
       const result = await env.AI.run(
         "@cf/zai-org/glm-4.7-flash",
         {
-          messages: [
-            {
-              role: "system",
-              content:
-                "Bạn là HungAI, trợ lý AI riêng của người dùng. Trả lời tự nhiên, rõ ràng và bằng tiếng Việt."
-            },
-            {
-              role: "user",
-              content: message
-            }
-          ]
+          messages
         }
       );
 
-      // Cloudflare trả response.response cho Workers AI model này.
       const reply =
         typeof result?.response === "string"
           ? result.response
@@ -96,7 +130,9 @@ export default {
 
       return new Response(
         JSON.stringify({
-          error: error?.message || "Workers AI error"
+          error:
+            error?.message ||
+            "Workers AI error"
         }),
         {
           status: 500,
