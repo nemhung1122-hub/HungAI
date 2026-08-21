@@ -11,31 +11,15 @@ export default {
     }
 
     if (request.method === "GET") {
-      return new Response(
-        JSON.stringify({
-          status: "online",
-          model: "@cf/zai-org/glm-4.7-flash"
-        }),
-        {
-          headers: {
-            "Content-Type": "application/json",
-            ...cors
-          }
-        }
-      );
+      return json({
+        status: "online",
+        name: "HungAI",
+        model: "@cf/zai-org/glm-4.7-flash"
+      }, cors);
     }
 
     if (request.method !== "POST") {
-      return new Response(
-        JSON.stringify({ error: "POST only" }),
-        {
-          status: 405,
-          headers: {
-            "Content-Type": "application/json",
-            ...cors
-          }
-        }
-      );
+      return json({ error: "POST only" }, cors, 405);
     }
 
     try {
@@ -46,50 +30,59 @@ export default {
           ? body.message.trim()
           : "";
 
-      /*
-       * Frontend gửi lịch sử hội thoại:
-       *
-       * history: [
-       *   { role: "user", content: "..." },
-       *   { role: "assistant", content: "..." }
-       * ]
-       */
-
       const history =
         Array.isArray(body?.history)
           ? body.history
               .filter(
-                item =>
-                  item &&
-                  (item.role === "user" ||
-                   item.role === "assistant") &&
-                  typeof item.content === "string"
+                x =>
+                  x &&
+                  (x.role === "user" ||
+                   x.role === "assistant") &&
+                  typeof x.content === "string"
               )
               .slice(-20)
           : [];
 
       if (!message) {
-        return new Response(
-          JSON.stringify({
-            error: "Tin nhắn trống."
-          }),
-          {
-            status: 400,
-            headers: {
-              "Content-Type": "application/json",
-              ...cors
-            }
-          }
-        );
+        return json({
+          error: "Tin nhắn trống."
+        }, cors, 400);
       }
+
+      /*
+       * HungAI system:
+       *
+       * - Hiểu ngữ cảnh cuộc trò chuyện.
+       * - Không bịa dữ liệu hiện tại.
+       * - Nếu không có dữ liệu thời gian thực,
+       *   nói rõ giới hạn.
+       * - Trả lời tự nhiên bằng tiếng Việt.
+       */
 
       const messages = [
         {
           role: "system",
-          content:
-            "Bạn là HungAI, một trợ lý AI riêng của người dùng. " +
-            "Hãy trả lời tự nhiên, rõ ràng, hữu ích và bằng tiếng Việt. " +
-            "Hãy sử dụng lịch sử cuộc trò chuyện để hiểu ngữ cảnh."
+          content: `
+Bạn là HungAI, trợ lý AI riêng của người dùng.
+
+Tính cách:
+- Thân thiện.
+- Tự nhiên.
+- Rõ ràng.
+- Hữu ích.
+- Ưu tiên tiếng Việt.
+
+Nguyên tắc:
+1. Sử dụng lịch sử hội thoại để hiểu ngữ cảnh.
+2. Trả lời trực tiếp câu hỏi.
+3. Không bịa thông tin.
+4. Với thông tin cần dữ liệu thời gian thực như thời tiết,
+   giá tiền, tin tức hoặc sự kiện mới nhất, nếu bạn không
+   có dữ liệu trực tiếp thì phải nói rõ rằng bạn không thể
+   xác nhận dữ liệu hiện tại.
+5. Khi người dùng hỏi tiếp về một chủ đề vừa nói,
+   hãy tiếp tục đúng ngữ cảnh.
+`
         },
 
         ...history,
@@ -107,41 +100,46 @@ export default {
         }
       );
 
-      const reply =
-        typeof result?.response === "string"
-          ? result.response
-          : JSON.stringify(result?.response ?? result);
+      let reply = result?.response;
 
-      return new Response(
-        JSON.stringify({
-          reply
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-            ...cors
-          }
-        }
-      );
+      if (typeof reply !== "string") {
+        reply = JSON.stringify(reply ?? result);
+      }
+
+      return json({
+        reply
+      }, cors);
 
     } catch (error) {
-      console.error("HungAI error:", error);
 
-      return new Response(
-        JSON.stringify({
-          error:
-            error?.message ||
-            "Workers AI error"
-        }),
-        {
-          status: 500,
-          headers: {
-            "Content-Type": "application/json",
-            ...cors
-          }
-        }
+      console.error(
+        "HungAI error:",
+        error
       );
+
+      return json({
+        error:
+          error?.message ||
+          "HungAI gặp lỗi."
+      }, cors, 500);
     }
   }
 };
+
+
+function json(data, cors, status = 200) {
+
+  return new Response(
+    JSON.stringify(data),
+    {
+      status,
+
+      headers: {
+        "Content-Type":
+          "application/json; charset=utf-8",
+
+        ...cors
+      }
+    }
+  );
+}
