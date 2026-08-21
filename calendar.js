@@ -8,11 +8,12 @@ const WEEKDAYS = [
   "Thứ Bảy"
 ];
 
-const TIME_ZONE = "Asia/Ho_Chi_Minh";
+const VIETNAM_TIMEZONE = "Asia/Ho_Chi_Minh";
 
 export function getVietnamDate(date = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TIME_ZONE,
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: VIETNAM_TIMEZONE,
+    weekday: "short",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -22,59 +23,42 @@ export function getVietnamDate(date = new Date()) {
     hour12: false
   }).formatToParts(date);
 
-  const get = (type) => {
-    const part = parts.find(
-      (item) => item.type === type
-    );
-
-    return part ? part.value : "";
-  };
+  const get = (type) =>
+    parts.find((part) => part.type === type)?.value;
 
   const year = Number(get("year"));
   const month = Number(get("month"));
   const day = Number(get("day"));
-  const hour = Number(get("hour"));
-  const minute = Number(get("minute"));
-  const second = Number(get("second"));
 
-  const weekdayIndex =
-    new Date(
-      Date.UTC(
-        year,
-        month - 1,
-        day
-      )
-    ).getUTCDay();
+  const weekdayIndex = new Date(
+    Date.UTC(year, month - 1, day)
+  ).getUTCDay();
 
   return {
     day,
     month,
     year,
     weekday: WEEKDAYS[weekdayIndex],
-    hour,
-    minute,
-    second,
-    timezone: TIME_ZONE
+    hour: Number(get("hour")),
+    minute: Number(get("minute")),
+    second: Number(get("second")),
+    timezone: VIETNAM_TIMEZONE
   };
 }
 
 export function formatVietnamDate(info) {
   return (
     `${info.weekday}, ` +
-    `ngày ${pad(info.day)}/` +
-    `${pad(info.month)}/` +
+    `${String(info.day).padStart(2, "0")}/` +
+    `${String(info.month).padStart(2, "0")}/` +
     `${info.year}`
   );
 }
 
 export function formatVietnamTime(info) {
   return (
-    `${pad(info.hour)}:` +
-    `${pad(info.minute)}:` +
-    `${pad(info.second)}`
+    `${String(info.hour).padStart(2, "0")}:` +
+    `${String(info.minute).padStart(2, "0")}:` +
+    `${String(info.second).padStart(2, "0")}`
   );
-}
-
-function pad(number) {
-  return String(number).padStart(2, "0");
 }
