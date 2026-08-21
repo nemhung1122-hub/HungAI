@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <title>HungAI</title>
 
   <style>
@@ -12,19 +13,19 @@
 
     body {
       margin: 0;
-      font-family: Arial, sans-serif;
+      height: 100vh;
       background: #0b0f14;
       color: white;
-      height: 100vh;
+      font-family: Arial, sans-serif;
       display: flex;
       flex-direction: column;
     }
 
     header {
       height: 60px;
+      padding: 0 18px;
       display: flex;
       align-items: center;
-      padding: 0 18px;
       background: #111720;
       border-bottom: 1px solid #252d38;
       font-size: 20px;
@@ -44,15 +45,15 @@
       padding: 20px;
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 12px;
     }
 
     .message {
       max-width: 85%;
       padding: 12px 15px;
       border-radius: 15px;
-      line-height: 1.5;
       white-space: pre-wrap;
+      line-height: 1.5;
       word-break: break-word;
     }
 
@@ -70,7 +71,7 @@
       background: #7f1d1d;
     }
 
-    .input-area {
+    .bottom {
       display: flex;
       gap: 10px;
       padding: 12px;
@@ -80,25 +81,24 @@
 
     textarea {
       flex: 1;
-      resize: none;
       min-height: 48px;
       max-height: 150px;
+      resize: none;
       border: 1px solid #303b48;
       border-radius: 12px;
       background: #0b0f14;
       color: white;
       padding: 13px;
-      outline: none;
       font-size: 15px;
+      outline: none;
     }
 
     button {
       width: 80px;
-      border: none;
+      border: 0;
       border-radius: 12px;
       background: #2563eb;
       color: white;
-      font-size: 15px;
       font-weight: bold;
     }
 
@@ -110,108 +110,128 @@
 
 <body>
 
-  <header>
-    HungAI
-    <span class="status">● Cloudflare AI</span>
-  </header>
+<header>
+  HungAI
+  <span class="status">● Online</span>
+</header>
 
-  <main id="chat">
-    <div class="message ai">
-      Xin chào! Tôi là HungAI. Bạn muốn hỏi gì?
-    </div>
-  </main>
-
-  <div class="input-area">
-    <textarea
-      id="message"
-      placeholder="Nhập tin nhắn..."
-      rows="1"
-    ></textarea>
-
-    <button id="send">Gửi</button>
+<main id="chat">
+  <div class="message ai">
+    Xin chào! Tôi là HungAI. 👋
   </div>
+</main>
 
-  <script>
-    const API_URL = "https://hungai-api.nemhung1122.workers.dev";
+<div class="bottom">
+  <textarea
+    id="input"
+    placeholder="Nhập tin nhắn..."
+  ></textarea>
 
-    const chat = document.getElementById("chat");
-    const input = document.getElementById("message");
-    const sendButton = document.getElementById("send");
+  <button id="send">Gửi</button>
+</div>
 
-    function addMessage(text, type) {
-      const message = document.createElement("div");
-      message.className = "message " + type;
-      message.textContent = text;
+<script>
+  const API_URL =
+    "https://hungai-api.nemhung1122.workers.dev";
 
-      chat.appendChild(message);
-      chat.scrollTop = chat.scrollHeight;
+  const chat = document.getElementById("chat");
+  const input = document.getElementById("input");
+  const send = document.getElementById("send");
 
-      return message;
+  function addMessage(text, type) {
+    const div = document.createElement("div");
+
+    div.className = "message " + type;
+    div.textContent = text;
+
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+
+    return div;
+  }
+
+  async function sendMessage() {
+    const message = input.value.trim();
+
+    if (!message || send.disabled) {
+      return;
     }
 
-    async function sendMessage() {
-      const message = input.value.trim();
+    addMessage(message, "user");
 
-      if (!message || sendButton.disabled) {
-        return;
-      }
+    input.value = "";
+    send.disabled = true;
 
-      addMessage(message, "user");
+    const thinking = addMessage(
+      "HungAI đang suy nghĩ...",
+      "ai"
+    );
 
-      input.value = "";
-      sendButton.disabled = true;
-      sendButton.textContent = "...";
+    try {
+      const response = await fetch(API_URL, {
+        method: "POST",
 
-      const thinking = addMessage("HungAI đang suy nghĩ...", "ai");
+        headers: {
+          "Content-Type": "application/json"
+        },
 
-      try {
-        const response = await fetch(API_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            message: message
-          })
-        });
+        body: JSON.stringify({
+          message: message
+        })
+      });
 
-        const data = await response.json();
+      const data = await response.json();
 
-        thinking.remove();
+      thinking.remove();
 
-        if (!response.ok) {
-          throw new Error(data.error || "API HungAI trả về lỗi.");
-        }
-
-        addMessage(
-          data.reply || "HungAI không nhận được câu trả lời.",
-          "ai"
-        );
-
-      } catch (error) {
-        thinking.remove();
-
-        addMessage(
-          "Lỗi kết nối HungAI: " + error.message,
-          "ai error"
+      if (!response.ok) {
+        throw new Error(
+          data.error || "Worker trả về lỗi."
         );
       }
 
-      sendButton.disabled = false;
-      sendButton.textContent = "Gửi";
+      if (!data.reply) {
+        throw new Error(
+          "Worker không trả về nội dung."
+        );
+      }
 
-      input.focus();
+      addMessage(data.reply, "ai");
+
+    } catch (error) {
+
+      thinking.remove();
+
+      addMessage(
+        "Lỗi: " + error.message,
+        "ai error"
+      );
     }
 
-    sendButton.addEventListener("click", sendMessage);
+    send.disabled = false;
+    input.focus();
+  }
 
-    input.addEventListener("keydown", function(event) {
-      if (event.key === "Enter" && !event.shiftKey) {
+  send.addEventListener(
+    "click",
+    sendMessage
+  );
+
+  input.addEventListener(
+    "keydown",
+    function(event) {
+
+      if (
+        event.key === "Enter" &&
+        !event.shiftKey
+      ) {
         event.preventDefault();
         sendMessage();
       }
-    });
-  </script>
+
+    }
+  );
+</script>
 
 </body>
 </html>
