@@ -139,15 +139,16 @@
   </button>
 </div>
 <script>
+"use strict";
 /* ==================================================
    CONFIG
 ================================================== */
 const API_URL =
   "https://hungai-api.nemhung1122.workers.dev";
-const STORAGE_KEY =
-  "hungai_history";
-const JOBS_KEY =
-  "hungai_pending_jobs";
+const HISTORY_KEY =
+  "hungai_history_v2";
+const PENDING_KEY =
+  "hungai_pending_v2";
 /* ==================================================
    ELEMENTS
 ================================================== */
@@ -168,7 +169,7 @@ function loadHistory() {
   try {
     const raw =
       localStorage.getItem(
-        STORAGE_KEY
+        HISTORY_KEY
       );
     if (!raw) {
       return [];
@@ -179,18 +180,20 @@ function loadHistory() {
       return [];
     }
     return data
-      .filter(item =>
-        item &&
-        (
-          item.role === "user" ||
-          item.role === "assistant"
-        ) &&
-        typeof item.content === "string"
-      )
+      .filter(item => {
+        return (
+          item &&
+          (
+            item.role === "user" ||
+            item.role === "assistant"
+          ) &&
+          typeof item.content === "string"
+        );
+      })
       .slice(-100);
   } catch (error) {
     console.error(
-      "LOAD HISTORY ERROR:",
+      "HISTORY LOAD ERROR:",
       error
     );
     return [];
@@ -199,14 +202,14 @@ function loadHistory() {
 function saveHistory() {
   try {
     localStorage.setItem(
-      STORAGE_KEY,
+      HISTORY_KEY,
       JSON.stringify(
         history.slice(-100)
       )
     );
   } catch (error) {
     console.error(
-      "SAVE HISTORY ERROR:",
+      "HISTORY SAVE ERROR:",
       error
     );
   }
@@ -214,11 +217,13 @@ function saveHistory() {
 /* ==================================================
    PENDING JOBS
 ================================================== */
+let pendingJobs =
+  loadPendingJobs();
 function loadPendingJobs() {
   try {
     const raw =
       localStorage.getItem(
-        JOBS_KEY
+        PENDING_KEY
       );
     if (!raw) {
       return [];
@@ -228,37 +233,43 @@ function loadPendingJobs() {
     return Array.isArray(data)
       ? data
       : [];
-  } catch {
+  } catch (error) {
+    console.error(
+      "PENDING LOAD ERROR:",
+      error
+    );
     return [];
   }
 }
-function savePendingJobs(jobs) {
+function savePendingJobs() {
   try {
     localStorage.setItem(
-      JOBS_KEY,
-      JSON.stringify(jobs)
+      PENDING_KEY,
+      JSON.stringify(
+        pendingJobs
+      )
     );
   } catch (error) {
     console.error(
-      "SAVE JOB ERROR:",
+      "PENDING SAVE ERROR:",
       error
     );
   }
 }
-let pendingJobs =
-  loadPendingJobs();
 /* ==================================================
-   MESSAGE UI
+   UI
 ================================================== */
 function addMessage(
   text,
   type,
-  extraClass = ""
+  extra = ""
 ) {
   const div =
-    document.createElement("div");
+    document.createElement(
+      "div"
+    );
   div.className =
-    `message ${type} ${extraClass}`;
+    `message ${type} ${extra}`;
   div.textContent =
     String(text ?? "");
   chat.appendChild(div);
@@ -269,11 +280,9 @@ function addMessage(
 /* ==================================================
    LOAD CHAT
 ================================================== */
-function loadChat() {
+function renderChat() {
   chat.innerHTML = "";
-  if (
-    !history.length
-  ) {
+  if (!history.length) {
     addMessage(
       "Xin chào! Mình là HungAI. 👋",
       "ai"
@@ -292,7 +301,7 @@ function loadChat() {
   }
 }
 /* ==================================================
-   API
+   API FETCH
 ================================================== */
 async function apiFetch(
   url,
@@ -308,7 +317,7 @@ async function apiFetch(
     );
   const text =
     await response.text();
-  let data;
+  let data = {};
   try {
     data =
       text
@@ -331,33 +340,25 @@ async function apiFetch(
    CREATE JOB
 ================================================== */
 async function createJob(
-  message
+  job
 ) {
-  const data =
-    await apiFetch(
-      `${API_URL}/chat`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type":
-            "application/json"
-        },
-        body:
-          JSON.stringify({
-            message,
-            history:
-              history.slice(-20)
-          })
-      }
-    );
-  if (
-    !data.jobId
-  ) {
-    throw new Error(
-      "Worker không trả jobId."
-    );
-  }
-  return data;
+  return apiFetch(
+    `${API_URL}/chat`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type":
+          "application/json"
+      },
+      body:
+        JSON.stringify({
+          jobId: job.jobId,
+          message: job.message,
+          history:
+            job.history
+        })
+    }
+  );
 }
 /* ==================================================
    GET JOB
@@ -373,93 +374,9 @@ async function getJob(
   );
 }
 /* ==================================================
-   WAIT FOR JOB
-================================================== */
-async function waitForJob(
-  jobId,
-  thinkingElement
-) {
-  const MAX_TIME =
-    5 * 60 * 1000;
-  const started =
-    Date.now();
-  while (
-    Date.now() - started <
-    MAX_TIME
-  ) {
-    let data;
-    try {
-      data =
-        await getJob(
-          jobId
-        );
-    } catch (error) {
-      /*
-       * Mất mạng tạm thời.
-       * Không làm mất job.
-       */
-      console.warn(
-        "JOB CHECK ERROR:",
-        error
-      );
-      await sleep(3000);
-      continue;
-    }
-    /* ==========================
-       COMPLETED
-    ========================== */
-    if (
-      data.status ===
-      "completed"
-    ) {
-      if (
-        thinkingElement
-      ) {
-        thinkingElement.remove();
-      }
-      return data.reply || "";
-    }
-    /* ==========================
-       FAILED
-    ========================== */
-    if (
-      data.status ===
-      "failed"
-    ) {
-      if (
-        thinkingElement
-      ) {
-        thinkingElement.remove();
-      }
-      throw new Error(
-        data.error ||
-        "HungAI xử lý thất bại."
-      );
-    }
-    /* ==========================
-       QUEUED / PROCESSING
-    ========================== */
-    if (
-      thinkingElement
-    ) {
-      thinkingElement.textContent =
-        data.status ===
-        "processing"
-          ? "HungAI đang xử lý..."
-          : "HungAI đang chờ xử lý...";
-    }
-    await sleep(1500);
-  }
-  throw new Error(
-    "HungAI xử lý quá lâu."
-  );
-}
-/* ==================================================
    SLEEP
 ================================================== */
-function sleep(
-  ms
-) {
+function sleep(ms) {
   return new Promise(
     resolve =>
       setTimeout(
@@ -469,7 +386,127 @@ function sleep(
   );
 }
 /* ==================================================
-   SEND MESSAGE
+   WAIT JOB
+================================================== */
+async function waitForJob(
+  jobId,
+  thinking
+) {
+  /*
+   * Không có giới hạn 5 phút.
+   *
+   * Job nằm ở Cloudflare.
+   * App có thể đóng rồi mở lại.
+   */
+  while (true) {
+    let data;
+    try {
+      data =
+        await getJob(
+          jobId
+        );
+    } catch (error) {
+      /*
+       * Mất mạng tạm thời.
+       *
+       * Không xóa job.
+       */
+      console.warn(
+        "JOB POLL ERROR:",
+        error
+      );
+      if (thinking) {
+        thinking.textContent =
+          "Đang kết nối lại với HungAI...";
+      }
+      await sleep(4000);
+      continue;
+    }
+    /* ==============================
+       COMPLETED
+    ============================== */
+    if (
+      data.status ===
+      "completed"
+    ) {
+      if (thinking) {
+        thinking.remove();
+      }
+      return data.reply || "";
+    }
+    /* ==============================
+       FAILED
+    ============================== */
+    if (
+      data.status ===
+      "failed"
+    ) {
+      if (thinking) {
+        thinking.remove();
+      }
+      throw new Error(
+        data.error ||
+        "HungAI xử lý thất bại."
+      );
+    }
+    /* ==============================
+       PROCESSING
+    ============================== */
+    if (
+      data.status ===
+      "processing"
+    ) {
+      if (thinking) {
+        thinking.textContent =
+          "HungAI đang suy nghĩ...";
+      }
+    }
+    /* ==============================
+       QUEUED
+    ============================== */
+    else {
+      if (thinking) {
+        thinking.textContent =
+          "HungAI đang xử lý...";
+      }
+    }
+    await sleep(1500);
+  }
+}
+/* ==================================================
+   ADD HISTORY
+================================================== */
+function addToHistory(
+  userMessage,
+  reply
+) {
+  history.push({
+    role: "user",
+    content: userMessage
+  });
+  history.push({
+    role: "assistant",
+    content: reply
+  });
+  history =
+    history.slice(-100);
+  saveHistory();
+}
+/* ==================================================
+   REMOVE PENDING
+================================================== */
+function removePending(
+  jobId
+) {
+  pendingJobs =
+    pendingJobs.filter(
+      job =>
+        job.jobId !== jobId
+    );
+  savePendingJobs();
+}
+/* ==================================================
+   SEND
 ================================================== */
 async function sendMessage() {
   const message =
@@ -480,81 +517,76 @@ async function sendMessage() {
   ) {
     return;
   }
-  /* ==========================
-     USER MESSAGE
-  ========================== */
+  /*
+   * Tạo ID NGAY LẬP TỨC.
+   */
+  const jobId =
+    crypto.randomUUID();
+  /*
+   * Lưu job LOCAL TRƯỚC khi
+   * gọi Worker.
+   *
+   * Nếu app bị đóng sau đó,
+   * ID vẫn còn.
+   */
+  const job = {
+    jobId,
+    message,
+    history:
+      history.slice(-20),
+    createdAt:
+      Date.now()
+  };
+  pendingJobs.push(job);
+  savePendingJobs();
+  /* ==============================
+     UI
+  ============================== */
   addMessage(
     message,
     "user"
   );
   input.value = "";
   send.disabled = true;
-  /* ==========================
-     THINKING
-  ========================== */
   const thinking =
     addMessage(
-      "HungAI đang tạo nhiệm vụ...",
+      "Đang gửi tới HungAI...",
       "ai",
       "thinking"
     );
   try {
     /*
-     * Tạo job.
-     * Sau bước này Worker tự xử lý.
+     * Tạo job trên Cloudflare.
      */
-    const job =
-      await createJob(
-        message
-      );
-    /*
-     * Lưu job ngay vào localStorage.
-     *
-     * Đây là phần quan trọng:
-     * nếu người dùng thoát app,
-     * jobId vẫn còn.
-     */
-    pendingJobs.push({
-      jobId:
-        job.jobId,
-      message,
-      createdAt:
-        Date.now()
-    });
-    savePendingJobs(
-      pendingJobs
+    await createJob(
+      job
     );
     /*
-     * Chờ Worker xử lý.
+     * Từ thời điểm này:
+     *
+     * app có thể đóng.
+     *
+     * Cloudflare vẫn giữ job.
      */
+    thinking.textContent =
+      "HungAI đang xử lý...";
     const reply =
       await waitForJob(
-        job.jobId,
+        jobId,
         thinking
       );
     /*
      * Lưu hội thoại.
      */
-    history.push({
-      role: "user",
-      content: message
-    });
-    history.push({
-      role: "assistant",
-      content: reply
-    });
-    saveHistory();
+    addToHistory(
+      message,
+      reply
+    );
     /*
-     * Xóa job đã hoàn thành.
+     * Xóa job hoàn thành.
      */
-    pendingJobs =
-      pendingJobs.filter(
-        item =>
-          item.jobId !==
-          job.jobId
-      );
-    savePendingJobs(
-      pendingJobs
+    removePending(
+      jobId
     );
     /*
      * Hiện câu trả lời.
@@ -565,110 +597,110 @@ async function sendMessage() {
     );
   } catch (error) {
     console.error(
-      "HUNGAI SEND ERROR:",
+      "SEND ERROR:",
       error
     );
-    if (
-      thinking
-    ) {
+    if (thinking) {
       thinking.remove();
     }
+    /*
+     * Không xóa pending job khi
+     * chỉ bị lỗi mạng.
+     *
+     * Khi mở lại app nó vẫn thử lại.
+     */
     addMessage(
-      "Lỗi: " +
-      (
-        error?.message ||
-        "Không xác định."
-      ),
+      "Không thể kết nối lúc này. Job vẫn được giữ lại để khôi phục.",
       "error"
     );
   } finally {
-    send.disabled = false;
+    send.disabled =
+      false;
     input.focus();
   }
 }
 /* ==================================================
-   RESUME PENDING JOBS
+   RESUME
 ================================================== */
 async function resumePendingJobs() {
-  if (
-    !pendingJobs.length
-  ) {
-    return;
-  }
   const jobs =
     [...pendingJobs];
+  if (!jobs.length) {
+    return;
+  }
   for (
     const job of jobs
   ) {
-    /*
-     * Không tạo message user lần nữa.
-     *
-     * Chỉ khôi phục trạng thái
-     * đang chờ câu trả lời.
-     */
     const thinking =
       addMessage(
-        `Đang lấy câu trả lời cho: ${job.message}`,
+        `Đang khôi phục: ${job.message}`,
         "ai",
         "thinking"
       );
     try {
+      /*
+       * Có thể job đã tồn tại
+       * trên Cloudflare.
+       *
+       * Nếu chưa gửi thành công,
+       * gửi lại cùng jobId.
+       *
+       * Worker chống duplicate.
+       */
+      try {
+        await createJob(
+          job
+        );
+      } catch (error) {
+        console.warn(
+          "RESEND JOB:",
+          error
+        );
+      }
       const reply =
         await waitForJob(
           job.jobId,
           thinking
         );
       /*
-       * Kiểm tra tránh lưu trùng.
+       * Kiểm tra trùng.
        */
-      const alreadyExists =
+      const duplicate =
         history.some(
           item =>
             item.role === "user" &&
             item.content ===
-            job.message
+              job.message
         );
-      if (
-        !alreadyExists
-      ) {
-        history.push({
-          role: "user",
-          content: job.message
-        });
-        history.push({
-          role: "assistant",
-          content: reply
-        });
-        saveHistory();
+      if (!duplicate) {
+        addToHistory(
+          job.message,
+          reply
+        );
       }
-      /*
-       * Xóa job hoàn thành.
-       */
-      pendingJobs =
-        pendingJobs.filter(
-          item =>
-            item.jobId !==
-            job.jobId
-        );
-      savePendingJobs(
-        pendingJobs
+      removePending(
+        job.jobId
       );
       addMessage(
         reply,
         "ai"
       );
     } catch (error) {
-      if (
-        thinking
-      ) {
+      console.error(
+        "RESUME ERROR:",
+        error
+      );
+      if (thinking) {
         thinking.remove();
       }
+      /*
+       * Không xóa pending.
+       *
+       * Lần mở app tiếp theo
+       * sẽ tiếp tục thử.
+       */
       addMessage(
-        "Lỗi khi khôi phục: " +
-        (
-          error?.message ||
-          "Không xác định."
-        ),
+        "HungAI chưa lấy được câu trả lời. Mình sẽ giữ nhiệm vụ này.",
         "error"
       );
     }
@@ -683,17 +715,17 @@ clear.addEventListener(
     history = [];
     pendingJobs = [];
     localStorage.removeItem(
-      STORAGE_KEY
+      HISTORY_KEY
     );
     localStorage.removeItem(
-      JOBS_KEY
+      PENDING_KEY
     );
-    loadChat();
+    renderChat();
     input.focus();
   }
 );
 /* ==================================================
-   BUTTON
+   SEND BUTTON
 ================================================== */
 send.addEventListener(
   "click",
@@ -717,11 +749,13 @@ input.addEventListener(
 /* ==================================================
    START
 ================================================== */
-loadChat();
+renderChat();
 input.focus();
 /*
- * Khôi phục những job đang xử lý
- * sau khi mở lại trang/app.
+ * Quan trọng:
+ *
+ * Khi index.html mở lại,
+ * các job cũ được khôi phục.
  */
 resumePendingJobs();
 </script>
