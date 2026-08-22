@@ -1,5 +1,16 @@
 {
   "name": "hungai-api",
   "main": "worker.js",
-  "compatibility_date": "2026-08-21"
+  "compatibility_date": "2026-08-21",
+  "ai": {
+    "binding": "AI"
+  },
+  "migrations": [
+    {
+      "tag": "v2",
+      "deleted_classes": [
+        "HungAIMemory"
+      ]
+    }
+  ]
 }
