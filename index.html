@@ -143,8 +143,15 @@
 <script>
 const API_URL =
   "https://hungai-api.nemhung1122.workers.dev";
-const STORAGE_KEY =
+const HISTORY_KEY =
   "hungai_history";
+const MAX_HISTORY =
+  100;
+const CLIENT_RETRIES =
+  3;
+// ==================================================
+// ELEMENTS
+// ==================================================
 const chat =
   document.getElementById("chat");
 const input =
@@ -162,7 +169,7 @@ function loadHistory() {
   try {
     const raw =
       localStorage.getItem(
-        STORAGE_KEY
+        HISTORY_KEY
       );
     if (!raw) {
       return [];
@@ -181,7 +188,7 @@ function loadHistory() {
         ) &&
         typeof item.content === "string"
       )
-      .slice(-100);
+      .slice(-MAX_HISTORY);
   } catch {
     return [];
   }
@@ -189,20 +196,22 @@ function loadHistory() {
 function saveHistory() {
   try {
     localStorage.setItem(
-      STORAGE_KEY,
+      HISTORY_KEY,
       JSON.stringify(
-        history.slice(-100)
+        history.slice(
+          -MAX_HISTORY
+        )
       )
     );
   } catch (error) {
     console.error(
-      "History save error:",
+      "History error:",
       error
     );
   }
 }
 // ==================================================
-// MESSAGE
+// UI
 // ==================================================
 function addMessage(
   text,
@@ -210,7 +219,9 @@ function addMessage(
   extraClass = ""
 ) {
   const div =
-    document.createElement("div");
+    document.createElement(
+      "div"
+    );
   div.className =
     `message ${type} ${extraClass}`;
   div.textContent =
@@ -220,9 +231,6 @@ function addMessage(
     chat.scrollHeight;
   return div;
 }
-// ==================================================
-// LOAD CHAT
-// ==================================================
 function loadChat() {
   chat.innerHTML = "";
   if (!history.length) {
@@ -244,55 +252,103 @@ function loadChat() {
   }
 }
 // ==================================================
-// API
+// API REQUEST
 // ==================================================
-async function callAI(message) {
-  const response =
-    await fetch(
-      `${API_URL}/chat`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type":
-            "application/json"
-        },
-        cache: "no-store",
-        body:
-          JSON.stringify({
-            message,
-            history:
-              history.slice(-20)
-          })
-      }
-    );
-  const text =
-    await response.text();
-  let data;
-  try {
-    data =
-      text
-        ? JSON.parse(text)
-        : {};
-  } catch {
-    throw new Error(
-      `Worker trả dữ liệu không hợp lệ. HTTP ${response.status}`
-    );
-  }
-  if (!response.ok) {
-    throw new Error(
-      data?.error ||
-      `Worker HTTP ${response.status}`
-    );
-  }
-  if (
-    typeof data.reply !== "string" ||
-    !data.reply.trim()
+async function requestAI(
+  message
+) {
+  let lastError = null;
+  for (
+    let attempt = 1;
+    attempt <= CLIENT_RETRIES;
+    attempt++
   ) {
-    throw new Error(
-      "Worker không trả câu trả lời."
-    );
+    try {
+      const controller =
+        new AbortController();
+      const timeout =
+        setTimeout(
+          () =>
+            controller.abort(),
+          60000
+        );
+      let response;
+      try {
+        response =
+          await fetch(
+            `${API_URL}/chat`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json"
+              },
+              cache: "no-store",
+              signal:
+                controller.signal,
+              body:
+                JSON.stringify({
+                  message,
+                  history:
+                    history.slice(-12)
+                })
+            }
+          );
+      } finally {
+        clearTimeout(
+          timeout
+        );
+      }
+      const text =
+        await response.text();
+      let data = {};
+      try {
+        data =
+          text
+            ? JSON.parse(text)
+            : {};
+      } catch {
+        throw new Error(
+          `Server trả dữ liệu không hợp lệ. HTTP ${response.status}`
+        );
+      }
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+          `Server HTTP ${response.status}`
+        );
+      }
+      if (
+        typeof data.reply !== "string" ||
+        !data.reply.trim()
+      ) {
+        throw new Error(
+          "Server không trả câu trả lời."
+        );
+      }
+      return data.reply.trim();
+    } catch (error) {
+      lastError =
+        error;
+      console.warn(
+        `HungAI request attempt ${attempt} failed`,
+        error
+      );
+      if (
+        attempt <
+        CLIENT_RETRIES
+      ) {
+        await sleep(
+          attempt * 1000
+        );
+      }
+    }
   }
-  return data.reply.trim();
+  throw new Error(
+    getClientError(
+      lastError
+    )
+  );
 }
 // ==================================================
 // SEND
@@ -306,14 +362,18 @@ async function sendMessage() {
   ) {
     return;
   }
-  // User
+  // ----------------------------------------------
+  // USER
+  // ----------------------------------------------
   addMessage(
     message,
     "user"
   );
   input.value = "";
   send.disabled = true;
-  // Thinking
+  // ----------------------------------------------
+  // THINKING
+  // ----------------------------------------------
   const thinking =
     addMessage(
       "HungAI đang suy nghĩ...",
@@ -322,27 +382,35 @@ async function sendMessage() {
     );
   try {
     const reply =
-      await callAI(message);
+      await requestAI(
+        message
+      );
+    // --------------------------------------------
+    // REMOVE THINKING
+    // --------------------------------------------
     thinking.remove();
-    // Save user
+    // --------------------------------------------
+    // SAVE
+    // --------------------------------------------
     history.push({
       role: "user",
       content: message
     });
-    // Save AI
     history.push({
       role: "assistant",
       content: reply
     });
     saveHistory();
-    // Show AI
+    // --------------------------------------------
+    // SHOW
+    // --------------------------------------------
     addMessage(
       reply,
       "ai"
     );
   } catch (error) {
     console.error(
-      "HungAI error:",
+      "HungAI final error:",
       error
     );
     thinking.remove();
@@ -360,6 +428,40 @@ async function sendMessage() {
   }
 }
 // ==================================================
+// ERROR
+// ==================================================
+function getClientError(
+  error
+) {
+  if (
+    error?.name ===
+    "AbortError"
+  ) {
+    return "HungAI phản hồi quá lâu. Đã tự thử lại 3 lần.";
+  }
+  if (
+    error instanceof TypeError
+  ) {
+    return "Kết nối tới HungAI bị gián đoạn. Đã tự thử lại 3 lần.";
+  }
+  return (
+    error?.message ||
+    "Không thể kết nối HungAI."
+  );
+}
+// ==================================================
+// SLEEP
+// ==================================================
+function sleep(ms) {
+  return new Promise(
+    resolve =>
+      setTimeout(
+        resolve,
+        ms
+      )
+  );
+}
+// ==================================================
 // CLEAR
 // ==================================================
 clear.addEventListener(
@@ -367,14 +469,14 @@ clear.addEventListener(
   () => {
     history = [];
     localStorage.removeItem(
-      STORAGE_KEY
+      HISTORY_KEY
     );
     loadChat();
     input.focus();
   }
 );
 // ==================================================
-// BUTTON
+// SEND BUTTON
 // ==================================================
 send.addEventListener(
   "click",
